@@ -17,6 +17,7 @@ type RatingApplication = {
 };
 
 const ADMIN_SESSION_KEY = "atelier-config-admin-key";
+const judgePath = (id: string) => `/?app=${encodeURIComponent(id)}`;
 
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState("");
@@ -29,9 +30,10 @@ export default function AdminPage() {
   const [message, setMessage] = useState("");
 
   const loadAdmin = async (key: string) => {
-    const response = await fetch("/api/configurations?admin=1", {
-      cache: "no-store",
-      headers: { "x-atelier-admin-key": key },
+    const response = await fetch("/api/configurations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list", adminKey: key }),
     });
     const payload = await response.json() as {
       applications?: RatingApplication[];
@@ -66,8 +68,8 @@ export default function AdminPage() {
     try {
       const response = await fetch("/api/configurations", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-atelier-admin-key": adminKey },
-        body: JSON.stringify({ name: name.trim(), baseUrl: baseUrl.trim() }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), baseUrl: baseUrl.trim(), adminKey }),
       });
       const payload = await response.json() as {
         saved?: boolean;
@@ -94,8 +96,8 @@ export default function AdminPage() {
     try {
       const response = await fetch("/api/configurations", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "x-atelier-admin-key": adminKey },
-        body: JSON.stringify({ id: application.id, enabled: !application.enabled }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: application.id, enabled: !application.enabled, adminKey }),
       });
       const payload = await response.json() as { saved?: boolean; applications?: RatingApplication[]; message?: string };
       if (!response.ok || !payload.saved) throw new Error(payload.message || "更新状态失败");
@@ -106,6 +108,12 @@ export default function AdminPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const copyJudgeLink = async (application: RatingApplication) => {
+    const url = `${window.location.origin}${judgePath(application.id)}`;
+    await window.navigator.clipboard.writeText(url);
+    setMessage(`已复制「${application.name}」的评委专属链接。`);
   };
 
   if (!authenticated) {
@@ -182,6 +190,8 @@ export default function AdminPage() {
               </div>
               <div className="application-actions">
                 <a href={application.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>
+                <Link href={judgePath(application.id)} target="_blank">打开评委链接</Link>
+                <button onClick={() => void copyJudgeLink(application)}>复制评委链接</button>
                 <button disabled={busy} onClick={() => void toggleApplication(application)}>
                   {application.enabled ? "从评委端隐藏" : "启用并展示"}
                 </button>

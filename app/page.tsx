@@ -217,7 +217,6 @@ const demoJudges = [
 ];
 
 const STORAGE_KEY = "atelier-workshop-score-desk-v1";
-const ACTIVE_APP_KEY = "atelier-active-rating-application-v1";
 
 function weightedTotal(scores: Record<string, number>) {
   return criteria.reduce(
@@ -317,8 +316,9 @@ export default function Home() {
   const [dataMode, setDataMode] = useState<"loading" | "demo" | "bitable" | "error">("loading");
   const [dataMessage, setDataMessage] = useState("正在连接飞书多维表格…");
   const [connectedEmpty, setConnectedEmpty] = useState(false);
-  const [applications, setApplications] = useState<RatingApplication[]>([]);
   const [activeApplicationId, setActiveApplicationId] = useState("");
+  const [activeApplicationName, setActiveApplicationName] = useState("");
+  const [linkState, setLinkState] = useState<"checking" | "valid" | "invalid">("checking");
   const [syncing, setSyncing] = useState(false);
   const [view, setView] = useState<View>("judge");
   const [activeWorkshopId, setActiveWorkshopId] = useState(demoWorkshops[0].id);
@@ -432,21 +432,33 @@ export default function Home() {
     let cancelled = false;
     const initialize = async () => {
       try {
+        const requestedId = new URL(window.location.href).searchParams.get("app")?.trim() || "";
+        if (!requestedId) {
+          setLinkState("invalid");
+          setHydrated(true);
+          return;
+        }
         const response = await fetch("/api/configurations", { cache: "no-store" });
         const payload = await response.json() as {
           applications?: RatingApplication[];
         };
         if (cancelled) return;
         const nextApplications = payload.applications ?? [];
-        setApplications(nextApplications);
-        const savedId = window.localStorage.getItem(ACTIVE_APP_KEY) ?? "";
-        const nextId = nextApplications.some((item) => item.id === savedId)
-          ? savedId
-          : nextApplications.find((item) => item.enabled)?.id ?? "";
-        setActiveApplicationId(nextId);
-        await loadApplication(nextId);
+        const requestedApplication = nextApplications.find((item) => item.id === requestedId && item.enabled);
+        if (!requestedApplication) {
+          setLinkState("invalid");
+          setHydrated(true);
+          return;
+        }
+        setActiveApplicationId(requestedApplication.id);
+        setActiveApplicationName(requestedApplication.name);
+        setLinkState("valid");
+        await loadApplication(requestedApplication.id);
       } catch {
-        if (!cancelled) await loadApplication("");
+        if (!cancelled) {
+          setLinkState("invalid");
+          setHydrated(true);
+        }
       }
     };
     void initialize();
@@ -753,14 +765,6 @@ export default function Home() {
     setToast("评分明细已导出");
   };
 
-  const switchApplication = async (applicationId: string) => {
-    setActiveApplicationId(applicationId);
-    window.localStorage.setItem(ACTIVE_APP_KEY, applicationId);
-    setAwardIndex(0);
-    setView("judge");
-    await loadApplication(applicationId);
-  };
-
   const resultsReady = totalTasks > 0 && submittedTasks === totalTasks;
   const bestPractice = resultsReady
     ? [...ranking].sort(
@@ -804,6 +808,21 @@ export default function Home() {
     },
   ];
 
+  if (linkState !== "valid") {
+    return (
+      <main className="rating-link-shell">
+        <section className="rating-link-card">
+          <span className="brand-mark" aria-hidden="true">A</span>
+          <p className="eyebrow">ATELIER RATING LINK</p>
+          <h1>{linkState === "checking" ? "正在验证评分链接" : "需要工作坊专属链接"}</h1>
+          <p>{linkState === "checking"
+            ? "正在确认这个链接对应的评分项目…"
+            : "此链接没有指定有效的评分项目，或者该项目尚未开放。请向工作坊组织者索取专属评委链接。"}</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className={`app-shell ${presenting ? "is-presenting" : ""}`}>
       <header className="topbar">
@@ -816,30 +835,12 @@ export default function Home() {
         </div>
         <div className="application-switcher">
           <span>评分项目</span>
-          <select
-            value={activeApplicationId}
-            onChange={(event) => void switchApplication(event.target.value)}
-            aria-label="切换评分项目"
-            disabled={!applications.length || dataMode === "loading"}
-          >
-            {!applications.length && <option value="">正在读取评分项目…</option>}
-            {applications.filter((item) => item.enabled).map((item) => (
-              <option value={item.id} key={item.id}>{item.name}</option>
-            ))}
-          </select>
-          <small>{applications.length ? `${applications.length} 个可用项目` : "正在连接配置中心"}</small>
+          <strong>{activeApplicationName}</strong>
+          <small>专属链接 · 不可切换</small>
         </div>
         {!connectedEmpty && <div className="workshop-switcher">
           <span>当前工作坊</span>
-          <select
-            value={workshop.id}
-            onChange={(event) => setActiveWorkshopId(event.target.value)}
-            aria-label="切换工作坊"
-          >
-            {workshopsData.map((item) => (
-              <option value={item.id} key={item.id}>{item.name}</option>
-            ))}
-          </select>
+          <strong>{workshop.name}</strong>
           <small title={dataMessage}>
             {workshop.code} · {workshop.date} · {
               dataMode === "bitable"

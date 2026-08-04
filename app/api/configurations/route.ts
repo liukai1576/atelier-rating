@@ -22,8 +22,9 @@ function makeId(name: string, appToken: string) {
   return `${slug || "rating"}-${appToken.slice(-6).toLowerCase()}`;
 }
 
-function hasAdminAccess(request: NextRequest) {
-  return Boolean(ADMIN_KEY) && request.headers.get("x-atelier-admin-key") === ADMIN_KEY;
+function hasAdminAccess(request: NextRequest, suppliedKey?: string) {
+  return Boolean(ADMIN_KEY)
+    && (request.headers.get("x-atelier-admin-key") === ADMIN_KEY || suppliedKey === ADMIN_KEY);
 }
 
 export async function GET(request: NextRequest) {
@@ -52,13 +53,22 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const payload = await request.json() as {
+      action?: "list";
+      adminKey?: string;
+      name?: string;
+      baseUrl?: string;
+    };
     if (!ADMIN_KEY) {
       return NextResponse.json({ saved: false, message: "服务器尚未配置 ATELIER_CONFIG_ADMIN_KEY。" }, { status: 503 });
     }
-    if (!hasAdminAccess(request)) {
+    if (!hasAdminAccess(request, payload.adminKey)) {
       return NextResponse.json({ saved: false, message: "管理密钥不正确。" }, { status: 401 });
     }
-    const payload = await request.json() as { name?: string; baseUrl?: string };
+    if (payload.action === "list") {
+      const applications = await listRegisteredApplications();
+      return NextResponse.json({ authenticated: true, applications, templateUrl: TEMPLATE_URL });
+    }
     const name = payload.name?.trim() || "";
     const baseUrl = payload.baseUrl?.trim() || "";
     if (!name || !baseUrl) {
@@ -94,13 +104,13 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const payload = await request.json() as { id?: string; enabled?: boolean; adminKey?: string };
     if (!ADMIN_KEY) {
       return NextResponse.json({ saved: false, message: "服务器尚未配置 ATELIER_CONFIG_ADMIN_KEY。" }, { status: 503 });
     }
-    if (!hasAdminAccess(request)) {
+    if (!hasAdminAccess(request, payload.adminKey)) {
       return NextResponse.json({ saved: false, message: "管理密钥不正确。" }, { status: 401 });
     }
-    const payload = await request.json() as { id?: string; enabled?: boolean };
     if (!payload.id || typeof payload.enabled !== "boolean") {
       return NextResponse.json({ saved: false, message: "缺少评分项目 ID 或启用状态。" }, { status: 400 });
     }

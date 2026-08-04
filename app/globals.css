@@ -130,7 +130,9 @@ textarea:disabled {
 }
 
 .workshop-switcher select,
-.application-switcher select {
+.application-switcher select,
+.workshop-switcher > strong,
+.application-switcher > strong {
   appearance: none;
   min-width: 0;
   padding: 7px 34px 7px 10px;
@@ -143,6 +145,16 @@ textarea:disabled {
     linear-gradient(135deg, var(--ink) 50%, transparent 50%) calc(100% - 8px) 52% / 5px 5px no-repeat;
   color: var(--ink);
   font-weight: 700;
+}
+
+.workshop-switcher > strong,
+.application-switcher > strong {
+  min-height: 34px;
+  padding-top: 7px;
+  background: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .view-nav {
@@ -1761,6 +1773,38 @@ textarea:disabled {
     var(--paper);
 }
 
+.rating-link-shell {
+  display: grid;
+  min-height: 100vh;
+  padding: 24px;
+  place-items: center;
+  background: var(--paper);
+}
+
+.rating-link-card {
+  width: min(680px, 100%);
+  padding: clamp(32px, 7vw, 72px);
+  border: 1px solid var(--line);
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.rating-link-card h1 {
+  max-width: 560px;
+  margin: 20px 0 14px;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: clamp(42px, 7vw, 72px);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.rating-link-card > p:not(.eyebrow) {
+  max-width: 560px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
 .admin-login-card {
   width: min(460px, 100%);
   padding: 42px;
@@ -2440,7 +2484,9 @@ textarea:disabled {
   }
 
   .workshop-switcher select,
-  .application-switcher select {
+  .application-switcher select,
+  .workshop-switcher > strong,
+  .application-switcher > strong {
     width: 100%;
     font-size: 11px;
   }
