@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { downloadProjectAttachment, getBitableConfig } from "@/lib/bitable";
+import { downloadProjectAttachment, resolveBitableConfig } from "@/lib/bitable";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const config = getBitableConfig();
+  const config = await resolveBitableConfig(request.nextUrl.searchParams.get("appId"));
   if (!config) {
     return NextResponse.json({ message: "尚未配置飞书多维表格。" }, { status: 503 });
   }

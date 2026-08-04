@@ -3,8 +3,8 @@ import {
   asText,
   batchUpdateRecords,
   createRecord,
-  getBitableConfig,
   listRecords,
+  resolveBitableConfig,
   updateRecord,
 } from "@/lib/bitable";
 
@@ -32,7 +32,7 @@ type ScorePayload = {
 };
 
 export async function POST(request: NextRequest) {
-  const config = getBitableConfig();
+  const config = await resolveBitableConfig(request.nextUrl.searchParams.get("appId"));
   if (!config) {
     return NextResponse.json({ saved: false, message: "尚未配置飞书多维表格。" }, { status: 503 });
   }
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const config = getBitableConfig();
+  const config = await resolveBitableConfig(request.nextUrl.searchParams.get("appId"));
   if (!config) {
     return NextResponse.json({ locked: false, message: "尚未配置飞书多维表格。" }, { status: 503 });
   }

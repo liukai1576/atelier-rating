@@ -12,6 +12,9 @@ type FeishuRecord = {
 };
 
 type BitableConfig = {
+  id?: string;
+  name?: string;
+  baseUrl?: string;
   appToken: string;
   projectsTableId: string;
   scoresTableId: string;
@@ -33,6 +36,13 @@ type CliEnvelope<T> = {
 
 const execFileAsync = promisify(execFile);
 
+const REQUIRED_TABLE_FIELDS: Record<string, string[]> = {
+  "项目": ["项目名称", "工作坊ID", "工作坊名称", "项目ID", "项目背景图", "排序", "启用"],
+  "评分": ["评分唯一键", "工作坊ID", "项目ID", "评委ID", "加权总分", "已锁票"],
+  "评委": ["评委姓名", "评委ID", "启用"],
+  "项目组": ["项目组名称", "项目组ID", "启用"],
+};
+
 export function getBitableConfig(): BitableConfig | null {
   const appToken = process.env.FEISHU_BITABLE_APP_TOKEN?.trim();
   const projectsTableId = process.env.FEISHU_PROJECTS_TABLE_ID?.trim();
@@ -53,7 +63,21 @@ export function getBitableConfig(): BitableConfig | null {
   };
 }
 
-async function runBaseCommand<T>(
+function getCliRuntime() {
+  return {
+    cliBin: process.env.LARK_CLI_BIN?.trim() || "lark-cli",
+    profile: process.env.LARK_CLI_PROFILE?.trim() || undefined,
+    identity: process.env.LARK_CLI_IDENTITY?.trim() === "bot" ? "bot" as const : "user" as const,
+  };
+}
+
+function getRegistryCoordinates() {
+  const appToken = process.env.FEISHU_REGISTRY_BASE_TOKEN?.trim();
+  const tableId = process.env.FEISHU_REGISTRY_TABLE_ID?.trim();
+  return appToken && tableId ? { appToken, tableId } : null;
+}
+
+export async function runBaseCommand<T>(
   config: BitableConfig,
   command: string,
   args: string[],
@@ -84,7 +108,14 @@ async function runBaseCommand<T>(
     stdout = failure.stdout ?? "";
     stderr = failure.stderr ?? "";
     if (!stdout.trim()) {
-      throw new Error(`飞书 CLI 执行失败：${stderr.trim() || failure.message}`);
+      try {
+        const parsed = JSON.parse(stderr) as CliEnvelope<unknown>;
+        const detail = [parsed.error?.message, parsed.error?.hint].filter(Boolean).join("；");
+        throw new Error(`飞书 CLI 请求失败：${detail || failure.message}`);
+      } catch (parseError) {
+        if (parseError instanceof Error && parseError.message.startsWith("飞书 CLI 请求失败")) throw parseError;
+        throw new Error(`飞书 CLI 执行失败：${stderr.trim() || failure.message}`);
+      }
     }
   }
 
@@ -99,6 +130,194 @@ async function runBaseCommand<T>(
     throw new Error(`飞书 CLI 请求失败：${detail || "未知错误"}`);
   }
   return (payload.data ?? payload) as T;
+}
+
+export function extractBaseToken(value: string) {
+  const trimmed = value.trim();
+  const match = trimmed.match(/\/base\/([a-zA-Z0-9]+)/);
+  if (match?.[1]) return match[1];
+  return /^[a-zA-Z0-9]{10,}$/.test(trimmed) ? trimmed : "";
+}
+
+export async function listTables(config: BitableConfig) {
+  const data = await runBaseCommand<{ tables?: Array<{ id: string; name: string }> }>(
+    config,
+    "+table-list",
+    ["--base-token", config.appToken, "--format", "json"],
+  );
+  return data.tables ?? [];
+}
+
+export async function listFields(config: BitableConfig, tableId: string) {
+  const data = await runBaseCommand<{ fields?: Array<{ id: string; name: string; type: string }> }>(
+    config,
+    "+field-list",
+    ["--base-token", config.appToken, "--table-id", tableId, "--format", "json"],
+  );
+  return data.fields ?? [];
+}
+
+export type RegisteredApplication = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  appToken: string;
+  projectsTableId: string;
+  scoresTableId: string;
+  judgesTableId: string;
+  teamsTableId: string;
+  enabled: boolean;
+  order: number;
+  recordId?: string;
+};
+
+function applicationFromRecord(record: FeishuRecord): RegisteredApplication | null {
+  const fields = record.fields;
+  const id = asText(fields["配置ID"]);
+  const appToken = asText(fields["BaseToken"]);
+  const projectsTableId = asText(fields["项目表ID"]);
+  const scoresTableId = asText(fields["评分表ID"]);
+  if (!id || !appToken || !projectsTableId || !scoresTableId) return null;
+  return {
+    id,
+    name: asText(fields["配置名称"], id),
+    baseUrl: asUrl(fields["Base链接"], `https://rollingdigital.feishu.cn/base/${appToken}`),
+    appToken,
+    projectsTableId,
+    scoresTableId,
+    judgesTableId: asText(fields["评委表ID"]),
+    teamsTableId: asText(fields["项目组表ID"]),
+    enabled: fields["启用"] === undefined || asBoolean(fields["启用"], true),
+    order: asNumber(fields["排序"], 100),
+    recordId: record.record_id,
+  };
+}
+
+export async function listRegisteredApplications() {
+  const registry = getRegistryCoordinates();
+  if (!registry) {
+    const fallback = getBitableConfig();
+    return fallback ? [{
+      id: "default",
+      name: "默认评分项目",
+      baseUrl: `https://rollingdigital.feishu.cn/base/${fallback.appToken}`,
+      appToken: fallback.appToken,
+      projectsTableId: fallback.projectsTableId,
+      scoresTableId: fallback.scoresTableId,
+      judgesTableId: fallback.judgesTableId ?? "",
+      teamsTableId: fallback.teamsTableId ?? "",
+      enabled: true,
+      order: 1,
+    } satisfies RegisteredApplication] : [];
+  }
+  const runtime = getCliRuntime();
+  const registryConfig: BitableConfig = {
+    ...runtime,
+    appToken: registry.appToken,
+    projectsTableId: registry.tableId,
+    scoresTableId: registry.tableId,
+  };
+  const records = await listRecords(registryConfig, registry.tableId);
+  return records
+    .map(applicationFromRecord)
+    .filter((item): item is RegisteredApplication => Boolean(item))
+    .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name, "zh-CN"));
+}
+
+export async function resolveBitableConfig(applicationId?: string | null): Promise<BitableConfig | null> {
+  const applications = await listRegisteredApplications();
+  const application = applications.find((item) => item.id === applicationId && item.enabled)
+    ?? applications.find((item) => item.enabled);
+  if (!application) return getBitableConfig();
+  return {
+    ...getCliRuntime(),
+    id: application.id,
+    name: application.name,
+    baseUrl: application.baseUrl,
+    appToken: application.appToken,
+    projectsTableId: application.projectsTableId,
+    scoresTableId: application.scoresTableId,
+    judgesTableId: application.judgesTableId || undefined,
+    teamsTableId: application.teamsTableId || undefined,
+  };
+}
+
+export async function validateBaseTemplate(baseReference: string) {
+  const appToken = extractBaseToken(baseReference);
+  if (!appToken) throw new Error("请输入有效的飞书多维表格 Base 链接或 Base Token。");
+  const config: BitableConfig = {
+    ...getCliRuntime(),
+    appToken,
+    projectsTableId: "",
+    scoresTableId: "",
+  };
+  const tables = await listTables(config);
+  const matched = Object.fromEntries(
+    Object.keys(REQUIRED_TABLE_FIELDS).map((name) => [name, tables.find((table) => table.name === name)]),
+  ) as Record<string, { id: string; name: string } | undefined>;
+  const missingTables = Object.entries(matched).filter(([, table]) => !table).map(([name]) => name);
+  if (missingTables.length) {
+    return { valid: false, appToken, missingTables, missingFields: {} as Record<string, string[]> };
+  }
+  const fieldEntries = await Promise.all(Object.entries(matched).map(async ([name, table]) => {
+    const fields = await listFields(config, table!.id);
+    const names = new Set(fields.map((field) => field.name));
+    return [name, REQUIRED_TABLE_FIELDS[name].filter((field) => !names.has(field))] as const;
+  }));
+  const missingFields = Object.fromEntries(fieldEntries.filter(([, fields]) => fields.length));
+  return {
+    valid: Object.keys(missingFields).length === 0,
+    appToken,
+    baseUrl: baseReference.includes("/base/") ? baseReference.split("?")[0] : `https://rollingdigital.feishu.cn/base/${appToken}`,
+    tables: {
+      projects: matched["项目"]!.id,
+      scores: matched["评分"]!.id,
+      judges: matched["评委"]!.id,
+      teams: matched["项目组"]!.id,
+    },
+    missingTables,
+    missingFields,
+  };
+}
+
+export async function saveRegisteredApplication(input: {
+  id: string;
+  name: string;
+  baseUrl: string;
+  appToken: string;
+  tables: { projects: string; scores: string; judges: string; teams: string };
+}) {
+  const registry = getRegistryCoordinates();
+  if (!registry) throw new Error("服务器尚未配置飞书评分项目配置中心。");
+  const registryConfig: BitableConfig = {
+    ...getCliRuntime(),
+    appToken: registry.appToken,
+    projectsTableId: registry.tableId,
+    scoresTableId: registry.tableId,
+  };
+  const records = await listRecords(registryConfig, registry.tableId);
+  const existing = records.find((record) =>
+    asText(record.fields["配置ID"]) === input.id || asText(record.fields["BaseToken"]) === input.appToken,
+  );
+  const fields = {
+    "配置名称": input.name,
+    "配置ID": input.id,
+    "Base链接": input.baseUrl,
+    "BaseToken": input.appToken,
+    "项目表ID": input.tables.projects,
+    "评分表ID": input.tables.scores,
+    "项目组表ID": input.tables.teams,
+    "评委表ID": input.tables.judges,
+    "启用": true,
+    "排序": existing ? asNumber(existing.fields["排序"], records.length + 1) : records.length + 1,
+    "创建时间": new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    }).format(new Date()),
+  };
+  if (existing) await updateRecord(registryConfig, registry.tableId, existing.record_id, fields);
+  else await createRecord(registryConfig, registry.tableId, fields);
+  return input;
 }
 
 export async function downloadProjectAttachment(
@@ -227,11 +446,12 @@ export async function createRecord(
 
   // Some CLI versions omit the created record ID from +record-upsert output.
   // Re-read the table and resolve the just-created row by its business key.
-  const uniqueKey = fields["评分唯一键"];
-  if (uniqueKey !== undefined) {
+  const keyField = ["评分唯一键", "配置ID"].find((field) => fields[field] !== undefined);
+  const uniqueKey = keyField ? fields[keyField] : undefined;
+  if (keyField && uniqueKey !== undefined) {
     const records = await listRecords(config, tableId);
     const created = records.find(
-      (item) => asText(item.fields["评分唯一键"]) === asText(uniqueKey),
+      (item) => asText(item.fields[keyField]) === asText(uniqueKey),
     );
     if (created) return { record: created };
   }

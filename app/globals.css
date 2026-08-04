@@ -60,8 +60,8 @@ textarea:disabled {
   top: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: auto minmax(260px, 1fr) auto auto;
-  gap: 26px;
+  grid-template-columns: auto minmax(150px, 220px) minmax(220px, 1fr) auto auto;
+  gap: 18px;
   align-items: center;
   min-height: 82px;
   padding: 12px 30px;
@@ -105,7 +105,8 @@ textarea:disabled {
   text-transform: uppercase;
 }
 
-.workshop-switcher {
+.workshop-switcher,
+.application-switcher {
   display: grid;
   grid-template-columns: auto minmax(230px, 440px);
   gap: 2px 12px;
@@ -114,18 +115,22 @@ textarea:disabled {
 }
 
 .workshop-switcher > span,
-.workshop-switcher > small {
+.workshop-switcher > small,
+.application-switcher > span,
+.application-switcher > small {
   color: var(--muted);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.workshop-switcher > small {
+.workshop-switcher > small,
+.application-switcher > small {
   grid-column: 2;
 }
 
-.workshop-switcher select {
+.workshop-switcher select,
+.application-switcher select {
   appearance: none;
   min-width: 0;
   padding: 7px 34px 7px 10px;
@@ -1721,6 +1726,220 @@ textarea:disabled {
   font-weight: 800;
 }
 
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.empty-actions a,
+.template-link {
+  display: inline-flex;
+  min-height: 42px;
+  padding: 0 18px;
+  align-items: center;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.config-view {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+  padding: 48px 36px 80px;
+}
+
+.config-heading {
+  display: flex;
+  gap: 28px;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.config-heading h1 {
+  margin: 8px 0 10px;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: clamp(42px, 6vw, 74px);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.config-heading p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.config-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  gap: 22px;
+  margin-top: 24px;
+}
+
+.config-form,
+.application-list {
+  padding: clamp(22px, 4vw, 38px);
+  border: 1px solid var(--line);
+  background: var(--white);
+  box-shadow: 0 14px 36px rgba(16, 24, 40, 0.055);
+}
+
+.config-step {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 14px;
+  padding: 0 0 20px;
+}
+
+.config-step > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--white);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.config-step strong {
+  font-size: 15px;
+}
+
+.config-step p,
+.application-list p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.config-form label {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.config-form input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  outline: none;
+  background: #fbfcfe;
+  color: var(--ink);
+}
+
+.config-form input:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(16, 24, 40, 0.06);
+}
+
+.config-submit {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--white);
+  font-weight: 800;
+}
+
+.config-message {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--blue);
+  background: var(--blue-soft);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.application-list > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.application-list > header h2 {
+  margin: 5px 0 0;
+  font-size: 28px;
+}
+
+.application-list > header > strong {
+  font-family: Georgia, serif;
+  font-size: 52px;
+  font-weight: 400;
+}
+
+.application-list article {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+
+.application-list article.active {
+  margin-inline: -14px;
+  padding-inline: 14px;
+  border-left: 3px solid var(--ink);
+  background: #f8fafc;
+}
+
+.application-list article small {
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.application-list article h3 {
+  margin: 5px 0 0;
+  font-size: 16px;
+}
+
+.application-actions {
+  display: grid;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.application-actions a,
+.application-actions button {
+  min-width: 94px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+
+.application-actions a {
+  display: grid;
+  place-items: center;
+}
+
 .award-visual::before,
 .award-visual::after {
   position: absolute;
@@ -1958,7 +2177,7 @@ textarea:disabled {
 
 @media (max-width: 1260px) {
   .topbar {
-    grid-template-columns: auto minmax(220px, 1fr) auto;
+    grid-template-columns: auto minmax(150px, 210px) minmax(220px, 1fr) auto;
   }
 
   .channel-pill {
@@ -1986,6 +2205,10 @@ textarea:disabled {
   }
 
   .workshop-switcher {
+    grid-template-columns: auto 1fr;
+  }
+
+  .application-switcher {
     grid-template-columns: auto 1fr;
   }
 
@@ -2120,17 +2343,21 @@ textarea:disabled {
     display: none;
   }
 
-  .workshop-switcher {
+  .workshop-switcher,
+  .application-switcher {
     display: block;
     min-width: 0;
   }
 
   .workshop-switcher > span,
-  .workshop-switcher > small {
+  .workshop-switcher > small,
+  .application-switcher > span,
+  .application-switcher > small {
     display: none;
   }
 
-  .workshop-switcher select {
+  .workshop-switcher select,
+  .application-switcher select {
     width: 100%;
     font-size: 11px;
   }
@@ -2344,13 +2571,28 @@ textarea:disabled {
   }
 
   .admin-view,
-  .awards-view {
+  .awards-view,
+  .config-view {
     padding: 24px 12px 70px;
   }
 
   .page-heading,
-  .award-controls {
+  .award-controls,
+  .config-heading {
     display: block;
+  }
+
+  .config-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .application-list article {
+    display: block;
+  }
+
+  .application-actions {
+    display: flex;
+    margin-top: 14px;
   }
 
   .page-heading h1,

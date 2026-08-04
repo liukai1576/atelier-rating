@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   asBoolean,
   asDate,
   asNumber,
   asText,
   asUrl,
-  getBitableConfig,
   listRecords,
+  resolveBitableConfig,
 } from "@/lib/bitable";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ const scoreFields: Record<string, string> = {
   presentation: "表达与答辩",
 };
 
-function projectBackground(value: unknown, recordId: string) {
+function projectBackground(value: unknown, recordId: string, applicationId?: string) {
   if (typeof value === "string") return asUrl(value);
   if (!Array.isArray(value) || !value.length) return "";
   const first = value[0];
@@ -31,11 +31,12 @@ function projectBackground(value: unknown, recordId: string) {
   const fileToken = asText(attachment.file_token);
   if (!fileToken) return "";
   const params = new URLSearchParams({ recordId, fileToken });
+  if (applicationId) params.set("appId", applicationId);
   return `/api/bitable/project-image?${params.toString()}`;
 }
 
-export async function GET() {
-  const config = getBitableConfig();
+export async function GET(request: NextRequest) {
+  const config = await resolveBitableConfig(request.nextUrl.searchParams.get("appId"));
   if (!config) {
     return NextResponse.json({
       connected: false,
@@ -121,7 +122,7 @@ export async function GET() {
         summary: asText(fields["一句话介绍"], "项目简介待补充"),
         description: asUrl(fields["项目资料"], "项目资料待补充"),
         duration: asText(fields["路演时长"], "8 分钟路演 · 4 分钟问答"),
-        backgroundImage: projectBackground(fields["项目背景图"], record.record_id),
+        backgroundImage: projectBackground(fields["项目背景图"], record.record_id, config.id),
         order: asNumber(fields["排序"], index + 1),
       });
       workshopMap.set(workshopId, workshop);
@@ -186,6 +187,7 @@ export async function GET() {
 
     return NextResponse.json({
       connected: true,
+      application: config.id ? { id: config.id, name: config.name, baseUrl: config.baseUrl } : undefined,
       empty: workshops.length === 0,
       workshops,
       judges,
