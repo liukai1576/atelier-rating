@@ -1,6 +1,9 @@
 import "server-only";
 
 import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 type FeishuRecord = {
@@ -54,6 +57,7 @@ async function runBaseCommand<T>(
   config: BitableConfig,
   command: string,
   args: string[],
+  options?: { cwd?: string },
 ) {
   const cliArgs = [
     "base",
@@ -68,6 +72,7 @@ async function runBaseCommand<T>(
   let stderr = "";
   try {
     const result = await execFileAsync(config.cliBin, cliArgs, {
+      cwd: options?.cwd,
       encoding: "utf8",
       maxBuffer: 20 * 1024 * 1024,
       timeout: 45_000,
@@ -94,6 +99,52 @@ async function runBaseCommand<T>(
     throw new Error(`飞书 CLI 请求失败：${detail || "未知错误"}`);
   }
   return (payload.data ?? payload) as T;
+}
+
+export async function downloadProjectAttachment(
+  config: BitableConfig,
+  recordId: string,
+  fileToken: string,
+) {
+  const workDir = await mkdtemp(join(tmpdir(), "atelier-project-image-"));
+  const outputPath = join(workDir, "attachment");
+  try {
+    const data = await runBaseCommand<{
+      downloaded?: Array<{
+        content_type?: string;
+        name?: string;
+        saved_path?: string;
+      }>;
+    }>(
+      config,
+      "+record-download-attachment",
+      [
+        "--base-token",
+        config.appToken,
+        "--table-id",
+        config.projectsTableId,
+        "--record-id",
+        recordId,
+        "--file-token",
+        fileToken,
+        "--output",
+        "./attachment",
+        "--overwrite",
+        "--format",
+        "json",
+      ],
+      { cwd: workDir },
+    );
+    const item = data.downloaded?.[0];
+    const bytes = await readFile(item?.saved_path || outputPath);
+    return {
+      bytes,
+      contentType: item?.content_type || "application/octet-stream",
+      name: item?.name || "project-background",
+    };
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
 }
 
 export async function listRecords(config: BitableConfig, tableId: string) {

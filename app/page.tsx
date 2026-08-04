@@ -33,6 +33,7 @@ type Project = {
   summary: string;
   description: string;
   duration: string;
+  backgroundImage?: string;
 };
 
 type Workshop = {
@@ -307,6 +308,7 @@ export default function Home() {
   const [judgesData, setJudgesData] = useState(demoJudges);
   const [dataMode, setDataMode] = useState<"loading" | "demo" | "bitable" | "error">("loading");
   const [dataMessage, setDataMessage] = useState("正在连接飞书多维表格…");
+  const [connectedEmpty, setConnectedEmpty] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [view, setView] = useState<View>("judge");
   const [activeWorkshopId, setActiveWorkshopId] = useState(demoWorkshops[0].id);
@@ -367,6 +369,7 @@ export default function Home() {
         const response = await fetch("/api/bitable/bootstrap", { cache: "no-store" });
         const payload = await response.json() as {
           connected: boolean;
+          empty?: boolean;
           message: string;
           workshops?: Workshop[];
           judges?: typeof demoJudges;
@@ -391,6 +394,12 @@ export default function Home() {
           });
           setDataMode("bitable");
           setDataMessage(payload.message);
+          setConnectedEmpty(false);
+        } else if (response.ok && payload.connected && payload.empty) {
+          setStore(localStore);
+          setDataMode("bitable");
+          setDataMessage(payload.message);
+          setConnectedEmpty(true);
         } else {
           setStore(localStore);
           setDataMode(response.ok ? "demo" : "error");
@@ -750,6 +759,25 @@ export default function Home() {
     },
   ];
 
+  if (connectedEmpty) {
+    return (
+      <main className="empty-app-shell">
+        <section className="empty-app-card">
+          <span className="brand-mark" aria-hidden="true">A</span>
+          <p className="eyebrow">FEISHU BASE CONNECTED</p>
+          <h1>空白评分应用已就绪</h1>
+          <p>{dataMessage}</p>
+          <ol>
+            <li>在「项目组」表填写项目组配置。</li>
+            <li>在「项目」表填写工作坊、项目资料和项目背景图。</li>
+            <li>在「评委」表填写评委信息；「评分」表保持空白。</li>
+          </ol>
+          <button onClick={() => window.location.reload()}>我已配置，重新读取</button>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className={`app-shell ${presenting ? "is-presenting" : ""}`}>
       <header className="topbar">
@@ -862,7 +890,12 @@ export default function Home() {
 
           <section className="score-workspace">
             <article className="project-brief">
-              <div className="project-poster" aria-hidden="true">
+              <div
+                className={`project-poster ${project.backgroundImage ? "has-image" : ""}`}
+                style={project.backgroundImage ? { backgroundImage: `url("${project.backgroundImage}")` } : undefined}
+                aria-label={project.backgroundImage ? `${project.name} 项目背景图` : undefined}
+                aria-hidden={project.backgroundImage ? undefined : true}
+              >
                 <span>{project.track}</span>
                 <strong>{String(workshop.projects.findIndex((item) => item.id === project.id) + 1).padStart(2, "0")}</strong>
                 <i />
@@ -1297,7 +1330,17 @@ export default function Home() {
                 <span>{awardIndex === 0 ? "评委提名票数" : "综合得分 / 10"}</span>
               </div>
             </div>
-            <div className="award-visual" aria-hidden="true">
+            <div
+              className={`award-visual ${awards[awardIndex].winner?.project.backgroundImage ? "has-image" : ""}`}
+              style={awards[awardIndex].winner?.project.backgroundImage
+                ? { backgroundImage: `url("${awards[awardIndex].winner.project.backgroundImage}")` }
+                : undefined}
+              role={awards[awardIndex].winner?.project.backgroundImage ? "img" : undefined}
+              aria-label={awards[awardIndex].winner?.project.backgroundImage
+                ? `${awards[awardIndex].winner.project.name} 项目背景图`
+                : undefined}
+              aria-hidden={awards[awardIndex].winner?.project.backgroundImage ? undefined : true}
+            >
               <span>{String(awardIndex + 1).padStart(2, "0")}</span>
               <i />
               <b>{awards[awardIndex].winner?.project.name.slice(0, 1) ?? "A"}</b>

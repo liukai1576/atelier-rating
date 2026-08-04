@@ -429,6 +429,25 @@ textarea:disabled {
   color: white;
 }
 
+.project-poster.has-image {
+  background-position: center;
+  background-size: cover;
+}
+
+.project-poster.has-image::before {
+  z-index: 0;
+  inset: 0;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(16, 24, 40, 0.12), rgba(16, 24, 40, 0.72));
+}
+
+.project-poster.has-image::after {
+  display: none;
+}
+
 .project-poster::before,
 .project-poster::after {
   position: absolute;
@@ -1634,6 +1653,72 @@ textarea:disabled {
   overflow: hidden;
   place-items: center;
   background: var(--blue);
+}
+
+.award-visual.has-image {
+  background-position: center;
+  background-size: cover;
+}
+
+.award-visual.has-image::before {
+  z-index: 0;
+  inset: 0;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(90deg, rgba(16, 24, 40, 0.18), rgba(16, 24, 40, 0.02));
+}
+
+.award-visual.has-image::after,
+.award-visual.has-image > b,
+.award-visual.has-image > i {
+  display: none;
+}
+
+.empty-app-shell {
+  display: grid;
+  min-height: 100vh;
+  padding: 24px;
+  place-items: center;
+  background: var(--paper);
+}
+
+.empty-app-card {
+  width: min(680px, 100%);
+  padding: clamp(28px, 6vw, 64px);
+  border: 1px solid var(--line);
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.empty-app-card h1 {
+  margin: 18px 0 12px;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: clamp(38px, 7vw, 68px);
+  font-weight: 500;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.empty-app-card > p:not(.eyebrow),
+.empty-app-card li {
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.empty-app-card ol {
+  margin: 28px 0;
+  padding-left: 20px;
+}
+
+.empty-app-card button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 0;
+  background: var(--ink);
+  color: white;
+  font-weight: 800;
 }
 
 .award-visual::before,

@@ -20,6 +20,20 @@ const scoreFields: Record<string, string> = {
   presentation: "表达与答辩",
 };
 
+function projectBackground(value: unknown, recordId: string) {
+  if (typeof value === "string") return asUrl(value);
+  if (!Array.isArray(value) || !value.length) return "";
+  const first = value[0];
+  if (!first || typeof first !== "object") return "";
+  const attachment = first as Record<string, unknown>;
+  const directUrl = asUrl(attachment.url ?? attachment.tmp_url);
+  if (directUrl) return directUrl;
+  const fileToken = asText(attachment.file_token);
+  if (!fileToken) return "";
+  const params = new URLSearchParams({ recordId, fileToken });
+  return `/api/bitable/project-image?${params.toString()}`;
+}
+
 export async function GET() {
   const config = getBitableConfig();
   if (!config) {
@@ -74,6 +88,7 @@ export async function GET() {
         summary: string;
         description: string;
         duration: string;
+        backgroundImage?: string;
         order: number;
       }>;
     }>();
@@ -106,6 +121,7 @@ export async function GET() {
         summary: asText(fields["一句话介绍"], "项目简介待补充"),
         description: asUrl(fields["项目资料"], "项目资料待补充"),
         duration: asText(fields["路演时长"], "8 分钟路演 · 4 分钟问答"),
+        backgroundImage: projectBackground(fields["项目背景图"], record.record_id),
         order: asNumber(fields["排序"], index + 1),
       });
       workshopMap.set(workshopId, workshop);
@@ -128,6 +144,7 @@ export async function GET() {
             summary: project.summary,
             description: project.description,
             duration: project.duration,
+            backgroundImage: project.backgroundImage,
           })),
       }))
       .filter((workshop) => workshop.projects.length > 0);
@@ -167,16 +184,15 @@ export async function GET() {
       };
     });
 
-    if (!workshops.length) {
-      throw new Error("项目数据表中没有可用记录，请检查字段名称和“启用”状态。");
-    }
-
     return NextResponse.json({
       connected: true,
+      empty: workshops.length === 0,
       workshops,
       judges,
       submissions,
-      message: `已从多维表格读取 ${teamRecords.length} 个项目组、${projectRecords.length} 个项目、${scoreRecords.length} 份评分。`,
+      message: workshops.length
+        ? `已从多维表格读取 ${teamRecords.length} 个项目组、${projectRecords.length} 个项目、${scoreRecords.length} 份评分。`
+        : "多维表格已连接；项目表目前为空，请先填写项目和评委配置。",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "读取多维表格失败";
