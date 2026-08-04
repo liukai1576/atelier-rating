@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type View = "judge" | "admin" | "awards" | "config";
+type View = "judge" | "admin" | "awards";
 type Tone = "low" | "mid" | "high";
 
 type Rubric = {
@@ -72,12 +72,6 @@ type AppStore = {
 type RatingApplication = {
   id: string;
   name: string;
-  baseUrl: string;
-  appToken: string;
-  projectsTableId: string;
-  scoresTableId: string;
-  judgesTableId: string;
-  teamsTableId: string;
   enabled: boolean;
   order: number;
 };
@@ -325,13 +319,6 @@ export default function Home() {
   const [connectedEmpty, setConnectedEmpty] = useState(false);
   const [applications, setApplications] = useState<RatingApplication[]>([]);
   const [activeApplicationId, setActiveApplicationId] = useState("");
-  const [templateUrl, setTemplateUrl] = useState("");
-  const [adminKeyRequired, setAdminKeyRequired] = useState(false);
-  const [configAdminKey, setConfigAdminKey] = useState("");
-  const [configName, setConfigName] = useState("");
-  const [configBaseUrl, setConfigBaseUrl] = useState("");
-  const [configSaving, setConfigSaving] = useState(false);
-  const [configMessage, setConfigMessage] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [view, setView] = useState<View>("judge");
   const [activeWorkshopId, setActiveWorkshopId] = useState(demoWorkshops[0].id);
@@ -448,14 +435,10 @@ export default function Home() {
         const response = await fetch("/api/configurations", { cache: "no-store" });
         const payload = await response.json() as {
           applications?: RatingApplication[];
-          templateUrl?: string;
-          adminKeyRequired?: boolean;
         };
         if (cancelled) return;
         const nextApplications = payload.applications ?? [];
         setApplications(nextApplications);
-        setTemplateUrl(payload.templateUrl ?? "");
-        setAdminKeyRequired(Boolean(payload.adminKeyRequired));
         const savedId = window.localStorage.getItem(ACTIVE_APP_KEY) ?? "";
         const nextId = nextApplications.some((item) => item.id === savedId)
           ? savedId
@@ -778,42 +761,6 @@ export default function Home() {
     await loadApplication(applicationId);
   };
 
-  const saveConfiguration = async () => {
-    if (!configName.trim() || !configBaseUrl.trim() || configSaving) return;
-    setConfigSaving(true);
-    setConfigMessage("正在读取 Base 并校验四张业务表…");
-    try {
-      const response = await fetch("/api/configurations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(configAdminKey ? { "x-atelier-admin-key": configAdminKey } : {}),
-        },
-        body: JSON.stringify({ name: configName.trim(), baseUrl: configBaseUrl.trim() }),
-      });
-      const payload = await response.json() as {
-        saved: boolean;
-        message?: string;
-        application?: RatingApplication;
-        applications?: RatingApplication[];
-      };
-      if (!response.ok || !payload.saved || !payload.application) {
-        throw new Error(payload.message || "评分表未通过模板校验。");
-      }
-      setApplications(payload.applications ?? []);
-      setActiveApplicationId(payload.application.id);
-      window.localStorage.setItem(ACTIVE_APP_KEY, payload.application.id);
-      setConfigMessage(`已加入系统：${payload.application.name}。四张业务表校验通过。`);
-      setConfigName("");
-      setConfigBaseUrl("");
-      await loadApplication(payload.application.id);
-    } catch (error) {
-      setConfigMessage(error instanceof Error ? error.message : "配置保存失败");
-    } finally {
-      setConfigSaving(false);
-    }
-  };
-
   const resultsReady = totalTasks > 0 && submittedTasks === totalTasks;
   const bestPractice = resultsReady
     ? [...ranking].sort(
@@ -873,13 +820,14 @@ export default function Home() {
             value={activeApplicationId}
             onChange={(event) => void switchApplication(event.target.value)}
             aria-label="切换评分项目"
+            disabled={!applications.length || dataMode === "loading"}
           >
-            {!applications.length && <option value="">环境默认项目</option>}
+            {!applications.length && <option value="">正在读取评分项目…</option>}
             {applications.filter((item) => item.enabled).map((item) => (
               <option value={item.id} key={item.id}>{item.name}</option>
             ))}
           </select>
-          <small>{applications.length} 个已配置项目</small>
+          <small>{applications.length ? `${applications.length} 个可用项目` : "正在连接配置中心"}</small>
         </div>
         {!connectedEmpty && <div className="workshop-switcher">
           <span>当前工作坊</span>
@@ -906,31 +854,22 @@ export default function Home() {
           <button className={view === "judge" ? "active" : ""} onClick={() => setView("judge")}>评委打分</button>
           <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>管理总览</button>
           <button className={view === "awards" ? "active" : ""} onClick={() => setView("awards")}>颁奖台</button>
-          <button className={view === "config" ? "active" : ""} onClick={() => setView("config")}>项目配置</button>
         </nav>
-        {view !== "config" && !connectedEmpty && <div className={`channel-pill ${channelLocked ? "locked" : ""}`}>
+        {!connectedEmpty && <div className={`channel-pill ${channelLocked ? "locked" : ""}`}>
           <i aria-hidden="true" />
           {channelLocked ? "通道已关闭" : "评分进行中"}
         </div>}
       </header>
 
-      {connectedEmpty && view !== "config" && (
+      {connectedEmpty && (
         <section className="empty-app-shell">
           <div className="empty-app-card">
             <p className="eyebrow">FEISHU BASE CONNECTED</p>
             <h1>这个评分项目还没有参赛项目</h1>
             <p>{dataMessage}</p>
-            <ol>
-              <li>点击下方按钮打开对应 Base。</li>
-              <li>在「项目组」「项目」「评委」三张表中填写内容。</li>
-              <li>返回后重新读取；「评分」表由系统自动写入。</li>
-            </ol>
+            <p>这张 Base 仍在配置中。如需增加项目或评委，请联系评分台管理员。</p>
             <div className="empty-actions">
-              {applications.find((item) => item.id === activeApplicationId)?.baseUrl && (
-                <a href={applications.find((item) => item.id === activeApplicationId)!.baseUrl} target="_blank" rel="noreferrer">打开飞书配置表</a>
-              )}
-              <button onClick={() => void loadApplication(activeApplicationId)}>我已填写，重新读取</button>
-              <button onClick={() => setView("config")}>返回项目配置</button>
+              <button onClick={() => void loadApplication(activeApplicationId)}>重新读取</button>
             </div>
           </div>
         </section>
@@ -1404,81 +1343,6 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-            </section>
-          </div>
-        </section>
-      )}
-
-      {view === "config" && (
-        <section className="config-view" data-testid="configuration-center">
-          <header className="config-heading">
-            <div>
-              <span className="eyebrow">RATING PROJECT SETUP</span>
-              <h1>评分项目配置</h1>
-              <p>把一张符合 Atelier 模板的飞书 Base 加入系统。平台会自动识别并校验项目、项目组、评委和评分四张表。</p>
-            </div>
-            {templateUrl && <a className="template-link" href={templateUrl} target="_blank" rel="noreferrer">打开标准空白模板 ↗</a>}
-          </header>
-
-          <div className="config-layout">
-            <form className="config-form" onSubmit={(event) => {
-              event.preventDefault();
-              void saveConfiguration();
-            }}>
-              <div className="config-step"><span>01</span><div><strong>复制模板</strong><p>打开标准模板，在飞书中复制一份，再填写项目资料、项目组和评委。</p></div></div>
-              <div className="config-step"><span>02</span><div><strong>粘贴新 Base 链接</strong><p>系统会按表名和必需字段自动检查，不需要手工填写 table ID。</p></div></div>
-              <label>
-                <span>评分项目名称</span>
-                <input
-                  value={configName}
-                  onChange={(event) => setConfigName(event.target.value)}
-                  placeholder="例如：AI 产品工作坊 · 2026 秋季场"
-                  required
-                />
-              </label>
-              <label>
-                <span>飞书多维表格 Base 链接</span>
-                <input
-                  value={configBaseUrl}
-                  onChange={(event) => setConfigBaseUrl(event.target.value)}
-                  placeholder="https://你的组织.feishu.cn/base/..."
-                  required
-                />
-              </label>
-              {adminKeyRequired && <label>
-                <span>管理密钥</span>
-                <input
-                  type="password"
-                  value={configAdminKey}
-                  onChange={(event) => setConfigAdminKey(event.target.value)}
-                  placeholder="服务器配置的 ATELIER_CONFIG_ADMIN_KEY"
-                  required
-                />
-              </label>}
-              <button className="config-submit" disabled={configSaving || !configName.trim() || !configBaseUrl.trim() || (adminKeyRequired && !configAdminKey)}>
-                {configSaving ? "正在校验并保存…" : "校验并加入系统"}
-              </button>
-              {configMessage && <p className="config-message" role="status">{configMessage}</p>}
-            </form>
-
-            <section className="application-list" aria-label="已配置评分项目">
-              <header><div><span className="eyebrow">CONNECTED BASES</span><h2>已配置项目</h2></div><strong>{applications.length}</strong></header>
-              {!applications.length && <p className="application-empty">还没有保存到配置中心的评分项目。使用左侧表单加入第一张 Base。</p>}
-              {applications.map((application) => (
-                <article className={application.id === activeApplicationId ? "active" : ""} key={application.id}>
-                  <div>
-                    <small>{application.id === activeApplicationId ? "当前使用" : application.enabled ? "已启用" : "已停用"}</small>
-                    <h3>{application.name}</h3>
-                    <p>项目 {application.projectsTableId} · 评分 {application.scoresTableId}</p>
-                  </div>
-                  <div className="application-actions">
-                    <a href={application.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>
-                    <button disabled={application.id === activeApplicationId} onClick={() => void switchApplication(application.id)}>
-                      {application.id === activeApplicationId ? "正在使用" : "切换使用"}
-                    </button>
-                  </div>
-                </article>
-              ))}
             </section>
           </div>
         </section>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   listRegisteredApplications,
   saveRegisteredApplication,
+  setRegisteredApplicationEnabled,
   validateBaseTemplate,
 } from "@/lib/bitable";
 
@@ -21,10 +22,28 @@ function makeId(name: string, appToken: string) {
   return `${slug || "rating"}-${appToken.slice(-6).toLowerCase()}`;
 }
 
-export async function GET() {
+function hasAdminAccess(request: NextRequest) {
+  return Boolean(ADMIN_KEY) && request.headers.get("x-atelier-admin-key") === ADMIN_KEY;
+}
+
+export async function GET(request: NextRequest) {
   try {
     const applications = await listRegisteredApplications();
-    return NextResponse.json({ applications, templateUrl: TEMPLATE_URL, adminKeyRequired: Boolean(ADMIN_KEY) });
+    const adminRequest = request.nextUrl.searchParams.get("admin") === "1";
+    if (adminRequest) {
+      if (!ADMIN_KEY) {
+        return NextResponse.json({ message: "服务器尚未配置 ATELIER_CONFIG_ADMIN_KEY。" }, { status: 503 });
+      }
+      if (!hasAdminAccess(request)) {
+        return NextResponse.json({ message: "管理密钥不正确。" }, { status: 401 });
+      }
+      return NextResponse.json({ applications, templateUrl: TEMPLATE_URL });
+    }
+    return NextResponse.json({
+      applications: applications
+        .filter((item) => item.enabled)
+        .map(({ id, name, enabled, order }) => ({ id, name, enabled, order })),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "读取评分项目配置失败";
     return NextResponse.json({ applications: [], templateUrl: TEMPLATE_URL, message }, { status: 502 });
@@ -33,7 +52,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    if (ADMIN_KEY && request.headers.get("x-atelier-admin-key") !== ADMIN_KEY) {
+    if (!ADMIN_KEY) {
+      return NextResponse.json({ saved: false, message: "服务器尚未配置 ATELIER_CONFIG_ADMIN_KEY。" }, { status: 503 });
+    }
+    if (!hasAdminAccess(request)) {
       return NextResponse.json({ saved: false, message: "管理密钥不正确。" }, { status: 401 });
     }
     const payload = await request.json() as { name?: string; baseUrl?: string };
@@ -66,6 +88,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ saved: true, application, applications, validation });
   } catch (error) {
     const message = error instanceof Error ? error.message : "保存评分项目配置失败";
+    return NextResponse.json({ saved: false, message }, { status: 502 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    if (!ADMIN_KEY) {
+      return NextResponse.json({ saved: false, message: "服务器尚未配置 ATELIER_CONFIG_ADMIN_KEY。" }, { status: 503 });
+    }
+    if (!hasAdminAccess(request)) {
+      return NextResponse.json({ saved: false, message: "管理密钥不正确。" }, { status: 401 });
+    }
+    const payload = await request.json() as { id?: string; enabled?: boolean };
+    if (!payload.id || typeof payload.enabled !== "boolean") {
+      return NextResponse.json({ saved: false, message: "缺少评分项目 ID 或启用状态。" }, { status: 400 });
+    }
+    await setRegisteredApplicationEnabled(payload.id, payload.enabled);
+    const applications = await listRegisteredApplications();
+    return NextResponse.json({ saved: true, applications });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "更新评分项目状态失败";
     return NextResponse.json({ saved: false, message }, { status: 502 });
   }
 }

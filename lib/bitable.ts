@@ -320,6 +320,22 @@ export async function saveRegisteredApplication(input: {
   return input;
 }
 
+export async function setRegisteredApplicationEnabled(id: string, enabled: boolean) {
+  const registry = getRegistryCoordinates();
+  if (!registry) throw new Error("服务器尚未配置飞书评分项目配置中心。");
+  const registryConfig: BitableConfig = {
+    ...getCliRuntime(),
+    appToken: registry.appToken,
+    projectsTableId: registry.tableId,
+    scoresTableId: registry.tableId,
+  };
+  const records = await listRecords(registryConfig, registry.tableId);
+  const existing = records.find((record) => asText(record.fields["配置ID"]) === id);
+  if (!existing) throw new Error("找不到指定的评分项目配置。");
+  await updateRecord(registryConfig, registry.tableId, existing.record_id, { "启用": enabled });
+  return { id, enabled };
+}
+
 export async function downloadProjectAttachment(
   config: BitableConfig,
   recordId: string,

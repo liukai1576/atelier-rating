@@ -1751,6 +1751,89 @@ textarea:disabled {
   padding: 48px 36px 80px;
 }
 
+.admin-login-shell {
+  display: grid;
+  min-height: 100vh;
+  padding: 24px;
+  place-items: center;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(79, 70, 229, 0.08), transparent 30%),
+    var(--paper);
+}
+
+.admin-login-card {
+  width: min(460px, 100%);
+  padding: 42px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.admin-login-card h1 {
+  margin: 18px 0 8px;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: 52px;
+  font-weight: 500;
+  letter-spacing: -0.05em;
+}
+
+.admin-login-card > p:not(.eyebrow, .config-message) {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.admin-login-card label {
+  display: grid;
+  gap: 8px;
+  margin-top: 26px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-login-card input {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+}
+
+.admin-login-card > button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  border: 0;
+  background: var(--ink);
+  color: var(--white);
+  font-weight: 800;
+}
+
+.admin-login-card > a {
+  display: block;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.admin-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-header-actions a,
+.admin-header-actions button {
+  display: inline-grid;
+  min-height: 40px;
+  padding: 0 16px;
+  place-items: center;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
 .config-heading {
   display: flex;
   gap: 28px;
