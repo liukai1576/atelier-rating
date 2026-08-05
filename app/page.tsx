@@ -816,10 +816,10 @@ export default function Home() {
         <section className="rating-link-card">
           <span className="brand-mark" aria-hidden="true">A</span>
           <p className="eyebrow">ATELIER RATING LINK</p>
-          <h1>{linkState === "checking" ? "正在验证评分链接" : "需要工作坊专属链接"}</h1>
+          <h1>{linkState === "checking" ? "正在验证工作坊链接" : "需要工作坊专属链接"}</h1>
           <p>{linkState === "checking"
-            ? "正在确认这个链接对应的评分项目…"
-            : "此链接指定的评分项目不存在或尚未开放。请向工作坊组织者索取新的专属评委链接。"}</p>
+            ? "正在确认这个链接对应的工作坊…"
+            : "此链接指定的工作坊不存在或尚未开放。请向工作坊组织者索取新的专属评委链接。"}</p>
         </section>
       </main>
     );
@@ -836,23 +836,18 @@ export default function Home() {
           </div>
         </div>
         <div className="application-switcher">
-          <span>评分项目</span>
-          <strong>{activeApplicationName}</strong>
-          <small>专属链接 · 不可切换</small>
-        </div>
-        {!connectedEmpty && <div className="workshop-switcher">
           <span>当前工作坊</span>
-          <strong>{workshop.name}</strong>
-          <small title={dataMessage}>
-            {workshop.code} · {workshop.date} · {
+          <strong>{activeApplicationName}</strong>
+          <small title={dataMessage}>{!connectedEmpty
+            ? `${workshop.code} · ${workshop.date} · ${
               dataMode === "bitable"
                 ? "多维表格已连接"
                 : dataMode === "loading"
                   ? "正在连接数据"
                   : "本地演示数据"
-            }
-          </small>
-        </div>}
+            }`
+            : "专属链接 · 不可切换"}</small>
+        </div>
         <nav className="view-nav" aria-label="系统视图">
           <button className={view === "judge" ? "active" : ""} onClick={() => setView("judge")}>评委打分</button>
           <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>管理总览</button>
@@ -868,7 +863,7 @@ export default function Home() {
         <section className="empty-app-shell">
           <div className="empty-app-card">
             <p className="eyebrow">FEISHU BASE CONNECTED</p>
-            <h1>这个评分项目还没有参赛项目</h1>
+            <h1>这个工作坊还没有参评项目</h1>
             <p>{dataMessage}</p>
             <p>这张 Base 仍在配置中。如需增加项目或评委，请联系评分台管理员。</p>
             <div className="empty-actions">

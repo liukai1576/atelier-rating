@@ -26,6 +26,8 @@ export default function AdminPage() {
   const [templateUrl, setTemplateUrl] = useState("");
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
+  const [editingId, setEditingId] = useState("");
+  const [editingName, setEditingName] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -97,9 +99,33 @@ export default function AdminPage() {
       setApplications(payload.applications ?? []);
       setName("");
       setBaseUrl("");
-      setMessage(`已加入系统：${payload.application?.name ?? "新评分项目"}。`);
+      setMessage(`已加入系统：${payload.application?.name ?? "新工作坊"}。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const renameApplication = async (application: RatingApplication) => {
+    const nextName = editingName.trim();
+    if (!nextName || busy) return;
+    setBusy(true);
+    setMessage(`正在更新「${application.name}」的名称…`);
+    try {
+      const response = await fetch("/api/configurations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: application.id, name: nextName, adminKey }),
+      });
+      const payload = await response.json() as { saved?: boolean; applications?: RatingApplication[]; message?: string };
+      if (!response.ok || !payload.saved) throw new Error(payload.message || "修改名称失败");
+      setApplications(payload.applications ?? []);
+      setEditingId("");
+      setEditingName("");
+      setMessage(`工作坊已改名为「${nextName}」，原评委链接继续有效。`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "修改名称失败");
     } finally {
       setBusy(false);
     }
@@ -149,22 +175,25 @@ export default function AdminPage() {
           </label>
           <button disabled={busy || !adminKey}>{busy ? "正在验证…" : "进入配置后台"}</button>
           {message && <p className="config-message" role="status">{message}</p>}
-          <Link href="/">返回评分台</Link>
+          <Link href="/">返回工作坊评分台</Link>
         </form>
       </main>
     );
   }
 
+  const returnApplication = applications.find((application) => application.enabled) ?? applications[0];
+  const returnPath = returnApplication ? judgePath(returnApplication.id) : "/";
+
   return (
     <main className="config-view admin-config-page" data-testid="configuration-center">
       <header className="config-heading">
         <div>
-          <span className="eyebrow">RATING PROJECT SETUP · ADMIN ONLY</span>
-          <h1>评分项目配置</h1>
-          <p>接入符合 Atelier 模板的飞书 Base，并控制哪些评分项目对评委可见。</p>
+          <span className="eyebrow">WORKSHOP SETUP · ADMIN ONLY</span>
+          <h1>工作坊配置</h1>
+          <p>每个工作坊连接一个符合 Atelier 模板的飞书 Base；Base 里填写参评项目、项目组和评委。</p>
         </div>
         <div className="admin-header-actions">
-          <Link href="/">返回评分台</Link>
+          <Link href={returnPath}>返回当前工作坊</Link>
           <button disabled={busy} onClick={() => {
             setBusy(true);
             setMessage("正在重新读取飞书配置…");
@@ -186,11 +215,11 @@ export default function AdminPage() {
           event.preventDefault();
           void saveConfiguration();
         }}>
-          <div className="config-step"><span>01</span><div><strong>复制模板</strong><p>复制标准 Base，再填写项目、项目组和评委；评分表保持空白。</p></div></div>
-          <div className="config-step"><span>02</span><div><strong>接入系统</strong><p>粘贴新 Base 链接，系统自动识别表 ID 并校验必需字段。</p></div></div>
+          <div className="config-step"><span>01</span><div><strong>复制模板</strong><p>一个工作坊复制一份标准 Base，再填写参评项目、项目组和评委；评分表保持空白。</p></div></div>
+          <div className="config-step"><span>02</span><div><strong>接入工作坊</strong><p>填写工作坊名称并粘贴 Base 链接，系统会生成固定的评委入口。</p></div></div>
           {templateUrl && <a className="template-link" href={templateUrl} target="_blank" rel="noreferrer">打开标准空白模板 ↗</a>}
           <label>
-            <span>评分项目名称</span>
+            <span>工作坊名称</span>
             <input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：AI 产品工作坊 · 2026 秋季场" required />
           </label>
           <label>
@@ -203,19 +232,26 @@ export default function AdminPage() {
           {message && <p className="config-message" role="status">{message}</p>}
         </form>
 
-        <section className="application-list" aria-label="已配置评分项目">
-          <header><div><span className="eyebrow">CONNECTED BASES</span><h2>已配置项目</h2></div><strong>{applications.length}</strong></header>
+        <section className="application-list" aria-label="已配置工作坊">
+          <header><div><span className="eyebrow">CONNECTED WORKSHOPS</span><h2>已配置工作坊</h2></div><strong>{applications.length}</strong></header>
           {applications.map((application) => (
             <article className={application.enabled ? "active" : ""} key={application.id}>
               <div>
                 <small>{application.enabled ? "评委可见" : "已隐藏"}</small>
-                <h3>{application.name}</h3>
-                <p>项目 {application.projectsTableId} · 评分 {application.scoresTableId}</p>
+                {editingId === application.id ? (
+                  <div className="application-name-editor">
+                    <input aria-label="工作坊名称" value={editingName} onChange={(event) => setEditingName(event.target.value)} autoFocus />
+                    <button disabled={busy || !editingName.trim()} onClick={() => void renameApplication(application)}>保存名称</button>
+                    <button disabled={busy} onClick={() => { setEditingId(""); setEditingName(""); }}>取消</button>
+                  </div>
+                ) : <h3>{application.name}</h3>}
+                <p>参评项目表 {application.projectsTableId} · 评分表 {application.scoresTableId}</p>
               </div>
               <div className="application-actions">
                 <a href={application.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>
-                <Link href={judgePath(application.id)} target="_blank">打开评委链接</Link>
+                <a href={judgePath(application.id)} target="_blank" rel="noreferrer">打开评委链接</a>
                 <button onClick={() => void copyJudgeLink(application)}>复制评委链接</button>
+                <button disabled={busy || editingId === application.id} onClick={() => { setEditingId(application.id); setEditingName(application.name); }}>修改名称</button>
                 <button disabled={busy} onClick={() => void toggleApplication(application)}>
                   {application.enabled ? "从评委端隐藏" : "启用并展示"}
                 </button>

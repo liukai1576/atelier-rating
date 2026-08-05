@@ -131,6 +131,7 @@ export async function GET(request: NextRequest) {
     const workshops = Array.from(workshopMap.values())
       .map((workshop) => ({
         ...workshop,
+        name: config.name || workshop.name,
         projects: workshop.projects
           .sort((left, right) => left.order - right.order)
           .map((project) => ({

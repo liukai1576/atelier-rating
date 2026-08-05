@@ -2042,6 +2042,33 @@ textarea:disabled {
   font-size: 16px;
 }
 
+.application-name-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.application-name-editor input {
+  width: min(100%, 260px);
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--ink);
+  background: var(--white);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.application-name-editor button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .application-actions {
   display: grid;
   gap: 7px;

@@ -37,7 +37,7 @@ type CliEnvelope<T> = {
 const execFileAsync = promisify(execFile);
 
 const REQUIRED_TABLE_FIELDS: Record<string, string[]> = {
-  "项目": ["项目名称", "工作坊ID", "工作坊名称", "项目ID", "项目背景图", "排序", "启用"],
+  "项目": ["项目名称", "工作坊ID", "项目ID", "项目背景图", "排序", "启用"],
   "评分": ["评分唯一键", "工作坊ID", "项目ID", "评委ID", "加权总分", "已锁票"],
   "评委": ["评委姓名", "评委ID", "启用"],
   "项目组": ["项目组名称", "项目组ID", "启用"],
@@ -220,7 +220,7 @@ export async function listRegisteredApplications() {
     const fallback = getBitableConfig();
     return fallback ? [{
       id: "default",
-      name: "默认评分项目",
+      name: "默认工作坊",
       baseUrl: `https://rollingdigital.feishu.cn/base/${fallback.appToken}`,
       appToken: fallback.appToken,
       projectsTableId: fallback.projectsTableId,
@@ -309,7 +309,7 @@ export async function saveRegisteredApplication(input: {
   tables: { projects: string; scores: string; judges: string; teams: string };
 }) {
   const registry = getRegistryCoordinates();
-  if (!registry) throw new Error("服务器尚未配置飞书评分项目配置中心。");
+  if (!registry) throw new Error("服务器尚未配置飞书工作坊配置中心。");
   const registryConfig: BitableConfig = {
     ...getCliRuntime(),
     appToken: registry.appToken,
@@ -343,7 +343,7 @@ export async function saveRegisteredApplication(input: {
 
 export async function setRegisteredApplicationEnabled(id: string, enabled: boolean) {
   const registry = getRegistryCoordinates();
-  if (!registry) throw new Error("服务器尚未配置飞书评分项目配置中心。");
+  if (!registry) throw new Error("服务器尚未配置飞书工作坊配置中心。");
   const registryConfig: BitableConfig = {
     ...getCliRuntime(),
     appToken: registry.appToken,
@@ -352,9 +352,25 @@ export async function setRegisteredApplicationEnabled(id: string, enabled: boole
   };
   const records = await listRecords(registryConfig, registry.tableId);
   const existing = records.find((record) => asText(record.fields["配置ID"]) === id);
-  if (!existing) throw new Error("找不到指定的评分项目配置。");
+  if (!existing) throw new Error("找不到指定的工作坊配置。");
   await updateRecord(registryConfig, registry.tableId, existing.record_id, { "启用": enabled });
   return { id, enabled };
+}
+
+export async function setRegisteredApplicationName(id: string, name: string) {
+  const registry = getRegistryCoordinates();
+  if (!registry) throw new Error("服务器尚未配置飞书工作坊配置中心。");
+  const registryConfig: BitableConfig = {
+    ...getCliRuntime(),
+    appToken: registry.appToken,
+    projectsTableId: registry.tableId,
+    scoresTableId: registry.tableId,
+  };
+  const records = await listRecords(registryConfig, registry.tableId);
+  const existing = records.find((record) => asText(record.fields["配置ID"]) === id);
+  if (!existing) throw new Error("找不到指定的工作坊配置。");
+  await updateRecord(registryConfig, registry.tableId, existing.record_id, { "配置名称": name });
+  return { id, name };
 }
 
 export async function downloadProjectAttachment(

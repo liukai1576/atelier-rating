@@ -3,6 +3,7 @@ import {
   listRegisteredApplications,
   saveRegisteredApplication,
   setRegisteredApplicationEnabled,
+  setRegisteredApplicationName,
   validateBaseTemplate,
 } from "@/lib/bitable";
 
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
         .map(({ id, name, enabled, order }) => ({ id, name, enabled, order })),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "读取评分项目配置失败";
+    const message = error instanceof Error ? error.message : "读取工作坊配置失败";
     return NextResponse.json({ applications: [], templateUrl: TEMPLATE_URL, message }, { status: 502 });
   }
 }
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
     const name = payload.name?.trim() || "";
     const baseUrl = payload.baseUrl?.trim() || "";
     if (!name || !baseUrl) {
-      return NextResponse.json({ saved: false, message: "请填写评分项目名称和 Base 链接。" }, { status: 400 });
+      return NextResponse.json({ saved: false, message: "请填写工作坊名称和 Base 链接。" }, { status: 400 });
     }
     const validation = await validateBaseTemplate(baseUrl);
     if (!validation.valid || !validation.tables || !validation.baseUrl) {
@@ -100,28 +101,30 @@ export async function POST(request: NextRequest) {
       ?? applications.find((item) => item.appToken === validation.appToken);
     return NextResponse.json({ saved: true, application, applications, validation });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "保存评分项目配置失败";
+    const message = error instanceof Error ? error.message : "保存工作坊配置失败";
     return NextResponse.json({ saved: false, message }, { status: 502 });
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
-    const payload = await request.json() as { id?: string; enabled?: boolean; adminKey?: string };
+    const payload = await request.json() as { id?: string; enabled?: boolean; name?: string; adminKey?: string };
     if (!ADMIN_KEY) {
       return NextResponse.json({ saved: false, message: "服务器尚未配置 ATELIER_CONFIG_ADMIN_KEY。" }, { status: 503 });
     }
     if (!hasAdminAccess(request, payload.adminKey)) {
       return NextResponse.json({ saved: false, message: "管理密钥不正确。" }, { status: 401 });
     }
-    if (!payload.id || typeof payload.enabled !== "boolean") {
-      return NextResponse.json({ saved: false, message: "缺少评分项目 ID 或启用状态。" }, { status: 400 });
+    const nextName = payload.name?.trim();
+    if (!payload.id || (typeof payload.enabled !== "boolean" && !nextName)) {
+      return NextResponse.json({ saved: false, message: "缺少工作坊 ID 或需要更新的内容。" }, { status: 400 });
     }
-    await setRegisteredApplicationEnabled(payload.id, payload.enabled);
+    if (nextName) await setRegisteredApplicationName(payload.id, nextName);
+    if (typeof payload.enabled === "boolean") await setRegisteredApplicationEnabled(payload.id, payload.enabled);
     const applications = await listRegisteredApplications();
     return NextResponse.json({ saved: true, applications });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "更新评分项目状态失败";
+    const message = error instanceof Error ? error.message : "更新工作坊配置失败";
     return NextResponse.json({ saved: false, message }, { status: 502 });
   }
 }
