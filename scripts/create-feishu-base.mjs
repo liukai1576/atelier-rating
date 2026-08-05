@@ -13,23 +13,24 @@ const identity = flag("--as", process.env.LARK_CLI_IDENTITY || "user");
 const profile = flag("--profile", process.env.LARK_CLI_PROFILE || "");
 const cli = process.env.LARK_CLI_BIN || "lark-cli";
 
-const projectFields = [
-  { name: "项目名称", type: "text" },
-  { name: "工作坊ID", type: "text" },
+const workshopFields = [
   { name: "工作坊名称", type: "text" },
-  { name: "工作坊编号", type: "text" },
+  { name: "工作坊ID", type: "text" },
   { name: "日期", type: "text" },
   { name: "地点", type: "text" },
   { name: "奖项名称", type: "text" },
   { name: "提名上限", type: "number" },
+  { name: "路演时长", type: "text" },
+];
+
+const projectFields = [
+  { name: "项目名称", type: "text" },
   { name: "项目ID", type: "text" },
-  { name: "项目组", type: "text" },
   { name: "项目组ID", type: "text" },
   { name: "赛道", type: "text" },
   { name: "一句话介绍", type: "text" },
   { name: "项目资料", type: "text", style: { type: "url" } },
   { name: "项目背景图", type: "attachment" },
-  { name: "路演时长", type: "text" },
   { name: "排序", type: "number" },
   { name: "启用", type: "checkbox" },
 ];
@@ -96,13 +97,14 @@ const created = run([
   "--time-zone",
   "Asia/Shanghai",
   "--table-name",
-  "项目",
+  "工作坊",
   "--fields",
-  JSON.stringify(projectFields),
+  JSON.stringify(workshopFields),
 ]);
 
 const baseToken = created.base.base_token;
-const projectsTableId = created.table.id;
+const workshopsTableId = created.table.id;
+const projects = run(["base", "+table-create", "--base-token", baseToken, "--name", "项目", "--fields", JSON.stringify(projectFields)]);
 const scores = run(["base", "+table-create", "--base-token", baseToken, "--name", "评分", "--fields", JSON.stringify(scoreFields)]);
 const judges = run(["base", "+table-create", "--base-token", baseToken, "--name", "评委", "--fields", JSON.stringify(judgeFields)]);
 const teams = run(["base", "+table-create", "--base-token", baseToken, "--name", "项目组", "--fields", JSON.stringify(teamFields)]);
@@ -112,14 +114,16 @@ const result = {
   url: created.base.url,
   baseToken,
   tables: {
-    projects: projectsTableId,
+    workshops: workshopsTableId,
+    projects: projects.table.id,
     scores: scores.table.id,
     judges: judges.table.id,
     teams: teams.table.id,
   },
   env: [
     `FEISHU_BITABLE_APP_TOKEN=${baseToken}`,
-    `FEISHU_PROJECTS_TABLE_ID=${projectsTableId}`,
+    `FEISHU_WORKSHOPS_TABLE_ID=${workshopsTableId}`,
+    `FEISHU_PROJECTS_TABLE_ID=${projects.table.id}`,
     `FEISHU_SCORES_TABLE_ID=${scores.table.id}`,
     `FEISHU_TEAMS_TABLE_ID=${teams.table.id}`,
     `FEISHU_JUDGES_TABLE_ID=${judges.table.id}`,

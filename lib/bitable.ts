@@ -16,6 +16,7 @@ type BitableConfig = {
   name?: string;
   baseUrl?: string;
   appToken: string;
+  workshopsTableId?: string;
   projectsTableId: string;
   scoresTableId: string;
   judgesTableId?: string;
@@ -37,7 +38,8 @@ type CliEnvelope<T> = {
 const execFileAsync = promisify(execFile);
 
 const REQUIRED_TABLE_FIELDS: Record<string, string[]> = {
-  "项目": ["项目名称", "工作坊ID", "项目ID", "项目背景图", "排序", "启用"],
+  "工作坊": ["工作坊名称", "工作坊ID", "日期", "地点", "奖项名称", "提名上限", "路演时长"],
+  "项目": ["项目名称", "项目ID", "项目组ID", "项目背景图", "排序", "启用"],
   "评分": ["评分唯一键", "工作坊ID", "项目ID", "评委ID", "加权总分", "已锁票"],
   "评委": ["评委姓名", "评委ID", "启用"],
   "项目组": ["项目组名称", "项目组ID", "启用"],
@@ -53,6 +55,7 @@ export function getBitableConfig(): BitableConfig | null {
   const identity = process.env.LARK_CLI_IDENTITY?.trim() === "bot" ? "bot" : "user";
   return {
     appToken,
+    workshopsTableId: process.env.FEISHU_WORKSHOPS_TABLE_ID?.trim() || undefined,
     projectsTableId,
     scoresTableId,
     judgesTableId: process.env.FEISHU_JUDGES_TABLE_ID?.trim() || undefined,
@@ -178,6 +181,19 @@ async function renameBitableBase(config: BitableConfig, title: string) {
   );
 }
 
+async function syncWorkshopRecordName(config: BitableConfig, title: string, fallbackId: string) {
+  if (!config.workshopsTableId) throw new Error("工作坊配置缺少工作坊表 ID。");
+  const records = await listRecords(config, config.workshopsTableId);
+  if (records[0]) {
+    await updateRecord(config, config.workshopsTableId, records[0].record_id, { "工作坊名称": title });
+    return;
+  }
+  await createRecord(config, config.workshopsTableId, {
+    "工作坊名称": title,
+    "工作坊ID": fallbackId,
+  });
+}
+
 export function extractBaseToken(value: string) {
   const trimmed = value.trim();
   const match = trimmed.match(/\/base\/([a-zA-Z0-9]+)/);
@@ -208,6 +224,7 @@ export type RegisteredApplication = {
   name: string;
   baseUrl: string;
   appToken: string;
+  workshopsTableId: string;
   projectsTableId: string;
   scoresTableId: string;
   judgesTableId: string;
@@ -229,6 +246,7 @@ function applicationFromRecord(record: FeishuRecord): RegisteredApplication | nu
     name: asText(fields["配置名称"], id),
     baseUrl: asUrl(fields["Base链接"], `https://rollingdigital.feishu.cn/base/${appToken}`),
     appToken,
+    workshopsTableId: asText(fields["工作坊表ID"]),
     projectsTableId,
     scoresTableId,
     judgesTableId: asText(fields["评委表ID"]),
@@ -248,6 +266,7 @@ export async function listRegisteredApplications() {
       name: "默认工作坊",
       baseUrl: `https://rollingdigital.feishu.cn/base/${fallback.appToken}`,
       appToken: fallback.appToken,
+      workshopsTableId: fallback.workshopsTableId ?? "",
       projectsTableId: fallback.projectsTableId,
       scoresTableId: fallback.scoresTableId,
       judgesTableId: fallback.judgesTableId ?? "",
@@ -281,6 +300,7 @@ export async function resolveBitableConfig(applicationId?: string | null): Promi
     name: application.name,
     baseUrl: application.baseUrl,
     appToken: application.appToken,
+    workshopsTableId: application.workshopsTableId || undefined,
     projectsTableId: application.projectsTableId,
     scoresTableId: application.scoresTableId,
     judgesTableId: application.judgesTableId || undefined,
@@ -294,6 +314,7 @@ export async function validateBaseTemplate(baseReference: string) {
   const config: BitableConfig = {
     ...getCliRuntime(),
     appToken,
+    workshopsTableId: "",
     projectsTableId: "",
     scoresTableId: "",
   };
@@ -316,6 +337,7 @@ export async function validateBaseTemplate(baseReference: string) {
     appToken,
     baseUrl: baseReference.includes("/base/") ? baseReference.split("?")[0] : `https://rollingdigital.feishu.cn/base/${appToken}`,
     tables: {
+      workshops: matched["工作坊"]!.id,
       projects: matched["项目"]!.id,
       scores: matched["评分"]!.id,
       judges: matched["评委"]!.id,
@@ -331,7 +353,7 @@ export async function saveRegisteredApplication(input: {
   name: string;
   baseUrl: string;
   appToken: string;
-  tables: { projects: string; scores: string; judges: string; teams: string };
+  tables: { workshops: string; projects: string; scores: string; judges: string; teams: string };
 }) {
   const registry = getRegistryCoordinates();
   if (!registry) throw new Error("服务器尚未配置飞书工作坊配置中心。");
@@ -341,15 +363,28 @@ export async function saveRegisteredApplication(input: {
     projectsTableId: registry.tableId,
     scoresTableId: registry.tableId,
   };
+  const targetConfig: BitableConfig = {
+    ...getCliRuntime(),
+    appToken: input.appToken,
+    workshopsTableId: input.tables.workshops,
+    projectsTableId: input.tables.projects,
+    scoresTableId: input.tables.scores,
+    judgesTableId: input.tables.judges,
+    teamsTableId: input.tables.teams,
+  };
   const records = await listRecords(registryConfig, registry.tableId);
   const existing = records.find((record) =>
     asText(record.fields["配置ID"]) === input.id || asText(record.fields["BaseToken"]) === input.appToken,
   );
+  const stableId = existing ? asText(existing.fields["配置ID"], input.id) : input.id;
+  await renameBitableBase(targetConfig, input.name);
+  await syncWorkshopRecordName(targetConfig, input.name, stableId);
   const fields = {
     "配置名称": input.name,
-    "配置ID": input.id,
+    "配置ID": stableId,
     "Base链接": input.baseUrl,
     "BaseToken": input.appToken,
+    "工作坊表ID": input.tables.workshops,
     "项目表ID": input.tables.projects,
     "评分表ID": input.tables.scores,
     "项目组表ID": input.tables.teams,
@@ -363,7 +398,7 @@ export async function saveRegisteredApplication(input: {
   };
   if (existing) await updateRecord(registryConfig, registry.tableId, existing.record_id, fields);
   else await createRecord(registryConfig, registry.tableId, fields);
-  return input;
+  return { ...input, id: stableId };
 }
 
 export async function setRegisteredApplicationEnabled(id: string, enabled: boolean) {
@@ -397,16 +432,18 @@ export async function setRegisteredApplicationName(id: string, name: string) {
   const targetConfig: BitableConfig = {
     ...getCliRuntime(),
     appToken: asText(existing.fields["BaseToken"]),
+    workshopsTableId: asText(existing.fields["工作坊表ID"]),
     projectsTableId: asText(existing.fields["项目表ID"]),
     scoresTableId: asText(existing.fields["评分表ID"]),
   };
   if (!targetConfig.appToken) throw new Error("工作坊配置缺少 Base Token，无法修改 Base 文件名。");
   await renameBitableBase(targetConfig, name);
   try {
+    await syncWorkshopRecordName(targetConfig, name, id);
     await updateRecord(registryConfig, registry.tableId, existing.record_id, { "配置名称": name });
   } catch (error) {
     const message = error instanceof Error ? error.message : "未知错误";
-    throw new Error(`目标 Base 已改名，但配置中心同步失败：${message}。请重试同一名称。`);
+    throw new Error(`目标 Base 已改名，但工作坊表或配置中心同步失败：${message}。请重试同一名称。`);
   }
   return { id, name };
 }

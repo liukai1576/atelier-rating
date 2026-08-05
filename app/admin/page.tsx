@@ -8,6 +8,7 @@ type RatingApplication = {
   name: string;
   baseUrl: string;
   appToken: string;
+  workshopsTableId: string;
   projectsTableId: string;
   scoresTableId: string;
   judgesTableId: string;
@@ -82,7 +83,7 @@ export default function AdminPage() {
   const saveConfiguration = async () => {
     if (!name.trim() || !baseUrl.trim() || busy) return;
     setBusy(true);
-    setMessage("正在读取 Base 并校验四张业务表…");
+    setMessage("正在读取 Base 并校验五张业务表…");
     try {
       const response = await fetch("/api/configurations", {
         method: "POST",
@@ -245,7 +246,7 @@ export default function AdminPage() {
                     <button disabled={busy} onClick={() => { setEditingId(""); setEditingName(""); }}>取消</button>
                   </div>
                 ) : <h3>{application.name}</h3>}
-                <p>参评项目表 {application.projectsTableId} · 评分表 {application.scoresTableId}</p>
+                <p>工作坊表 {application.workshopsTableId || "未配置"} · 参评项目表 {application.projectsTableId} · 评分表 {application.scoresTableId}</p>
               </div>
               <div className="application-actions">
                 <a href={application.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>

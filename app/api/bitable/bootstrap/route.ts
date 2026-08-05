@@ -45,7 +45,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [projectRecords, scoreRecords, judgeRecords, teamRecords] = await Promise.all([
+    const [workshopRecords, projectRecords, scoreRecords, judgeRecords, teamRecords] = await Promise.all([
+      config.workshopsTableId ? listRecords(config, config.workshopsTableId) : Promise.resolve([]),
       listRecords(config, config.projectsTableId),
       listRecords(config, config.scoresTableId),
       config.judgesTableId ? listRecords(config, config.judgesTableId) : Promise.resolve([]),
@@ -69,51 +70,25 @@ export async function GET(request: NextRequest) {
         }),
     );
 
-    const workshopMap = new Map<string, {
-      id: string;
-      name: string;
-      code: string;
-      date: string;
-      location: string;
-      nominationName: string;
-      nominationLimit: number;
-      projects: Array<{
-        id: string;
-        name: string;
-        team: string;
-        teamOwner?: string;
-        teamMembers?: string;
-        teamDescription?: string;
-        teamMaterialsUrl?: string;
-        track: string;
-        summary: string;
-        description: string;
-        duration: string;
-        backgroundImage?: string;
-        order: number;
-      }>;
-    }>();
-
-    projectRecords.forEach((record, index) => {
+    const legacyFields = projectRecords[0]?.fields ?? {};
+    const workshopFields = workshopRecords[0]?.fields ?? legacyFields;
+    const workshopId = asText(
+      workshopFields["工作坊ID"],
+      asText(legacyFields["工作坊ID"], config.id || "default-workshop"),
+    );
+    const duration = asText(
+      workshopFields["路演时长"],
+      asText(legacyFields["路演时长"], "8 分钟路演 · 4 分钟问答"),
+    );
+    const projects = projectRecords.flatMap((record, index) => {
       const fields = record.fields;
-      if (fields["启用"] !== undefined && !asBoolean(fields["启用"], true)) return;
-      const workshopId = asText(fields["工作坊ID"], "default-workshop");
+      if (fields["启用"] !== undefined && !asBoolean(fields["启用"], true)) return [];
       const teamId = asText(fields["项目组ID"]);
       const team = teams.get(teamId);
-      const workshop = workshopMap.get(workshopId) ?? {
-        id: workshopId,
-        name: asText(fields["工作坊名称"], "工作坊评分"),
-        code: asText(fields["工作坊编号"], workshopId),
-        date: asDate(fields["日期"], "日期待定"),
-        location: asText(fields["地点"], "地点待定"),
-        nominationName: asText(fields["奖项名称"], "评委特别奖"),
-        nominationLimit: Math.max(1, asNumber(fields["提名上限"], 2)),
-        projects: [],
-      };
-      workshop.projects.push({
+      return [{
         id: asText(fields["项目ID"], record.record_id),
         name: asText(fields["项目名称"], `项目 ${index + 1}`),
-        team: team?.name ?? asText(fields["项目组"], "未命名项目组"),
+        team: team?.name ?? "未匹配项目组",
         teamOwner: team?.owner,
         teamMembers: team?.members,
         teamDescription: team?.description,
@@ -121,18 +96,20 @@ export async function GET(request: NextRequest) {
         track: asText(fields["赛道"], "开放赛道"),
         summary: asText(fields["一句话介绍"], "项目简介待补充"),
         description: asUrl(fields["项目资料"], "项目资料待补充"),
-        duration: asText(fields["路演时长"], "8 分钟路演 · 4 分钟问答"),
+        duration,
         backgroundImage: projectBackground(fields["项目背景图"], record.record_id, config.id),
         order: asNumber(fields["排序"], index + 1),
-      });
-      workshopMap.set(workshopId, workshop);
+      }];
     });
 
-    const workshops = Array.from(workshopMap.values())
-      .map((workshop) => ({
-        ...workshop,
-        name: config.name || workshop.name,
-        projects: workshop.projects
+    const workshops = projects.length ? [{
+      id: workshopId,
+      name: config.name || asText(workshopFields["工作坊名称"], "工作坊评分"),
+      date: asDate(workshopFields["日期"], "日期待定"),
+      location: asText(workshopFields["地点"], "地点待定"),
+      nominationName: asText(workshopFields["奖项名称"], "评委特别奖"),
+      nominationLimit: Math.max(1, asNumber(workshopFields["提名上限"], 2)),
+      projects: projects
           .sort((left, right) => left.order - right.order)
           .map((project) => ({
             id: project.id,
@@ -148,8 +125,7 @@ export async function GET(request: NextRequest) {
             duration: project.duration,
             backgroundImage: project.backgroundImage,
           })),
-      }))
-      .filter((workshop) => workshop.projects.length > 0);
+    }] : [];
 
     const judges = judgeRecords
       .filter((record) => record.fields["启用"] === undefined || asBoolean(record.fields["启用"], true))

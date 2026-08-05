@@ -39,7 +39,6 @@ type Project = {
 type Workshop = {
   id: string;
   name: string;
-  code: string;
   date: string;
   location: string;
   nominationName: string;
@@ -178,7 +177,6 @@ const demoWorkshops: Workshop[] = [
   {
     id: "product-lab",
     name: "产品创新工作坊 · 秋季场",
-    code: "WS–024",
     date: "2026.09.18",
     location: "上海 · 共创大厅",
     nominationName: "最具启发奖",
@@ -188,7 +186,6 @@ const demoWorkshops: Workshop[] = [
   {
     id: "ai-camp",
     name: "AI 应用共创营 · 华东场",
-    code: "WS–031",
     date: "2026.10.12",
     location: "杭州 · 未来中心",
     nominationName: "最佳实践奖",
@@ -198,7 +195,6 @@ const demoWorkshops: Workshop[] = [
   {
     id: "cx-sprint",
     name: "客户体验设计赛 · 决选",
-    code: "WS–036",
     date: "2026.11.07",
     location: "深圳 · 城市客厅",
     nominationName: "体验突破奖",
@@ -839,7 +835,7 @@ export default function Home() {
           <span>当前工作坊</span>
           <strong>{activeApplicationName}</strong>
           <small title={dataMessage}>{!connectedEmpty
-            ? `${workshop.code} · ${workshop.date} · ${
+            ? `${workshop.date} · ${
               dataMode === "bitable"
                 ? "多维表格已连接"
                 : dataMode === "loading"
@@ -1369,7 +1365,7 @@ export default function Home() {
           <article className={`award-stage award-${awardIndex}`}>
             <div className="award-copy">
               <div className="award-overline"><span>{String(awardIndex + 1).padStart(2, "0")} / 04</span><i /><em>{awards[awardIndex].eyebrow}</em></div>
-              <p>{workshop.code} · {workshop.date}</p>
+              <p>{workshop.date} · {workshop.location}</p>
               <h2>{awards[awardIndex].label}</h2>
               <small>{awards[awardIndex].note}</small>
               <div className="winner-block">
