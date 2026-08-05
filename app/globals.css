@@ -60,8 +60,8 @@ textarea:disabled {
   top: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: auto minmax(150px, 220px) minmax(220px, 1fr) auto auto;
-  gap: 18px;
+  grid-template-columns: auto minmax(360px, 1fr) auto auto;
+  gap: 24px;
   align-items: center;
   min-height: 82px;
   padding: 12px 30px;
@@ -74,6 +74,7 @@ textarea:disabled {
   display: flex;
   gap: 10px;
   align-items: center;
+  min-width: max-content;
 }
 
 .brand-mark {
@@ -108,10 +109,11 @@ textarea:disabled {
 .workshop-switcher,
 .application-switcher {
   display: grid;
-  grid-template-columns: auto minmax(230px, 440px);
+  grid-template-columns: max-content minmax(280px, 520px);
   gap: 2px 12px;
   align-items: center;
   justify-content: start;
+  min-width: 0;
 }
 
 .workshop-switcher > span,
@@ -122,6 +124,7 @@ textarea:disabled {
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .workshop-switcher > small,
@@ -160,6 +163,7 @@ textarea:disabled {
 .view-nav {
   display: flex;
   gap: 3px;
+  justify-self: end;
   padding: 4px;
   border: 1px solid var(--line);
   border-radius: 99px;
@@ -174,6 +178,7 @@ textarea:disabled {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .view-nav button.active {
@@ -2331,7 +2336,8 @@ textarea:disabled {
 
 @media (max-width: 1260px) {
   .topbar {
-    grid-template-columns: auto minmax(150px, 210px) minmax(220px, 1fr) auto;
+    grid-template-columns: auto minmax(300px, 1fr) auto;
+    gap: 18px;
   }
 
   .channel-pill {
