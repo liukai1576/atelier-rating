@@ -77,16 +77,13 @@ function getRegistryCoordinates() {
   return appToken && tableId ? { appToken, tableId } : null;
 }
 
-export async function runBaseCommand<T>(
+async function runLarkCommand<T>(
   config: BitableConfig,
-  command: string,
-  args: string[],
+  command: string[],
   options?: { cwd?: string },
 ) {
   const cliArgs = [
-    "base",
-    command,
-    ...args,
+    ...command,
     "--as",
     config.identity,
   ];
@@ -151,6 +148,34 @@ export async function runBaseCommand<T>(
     return (payload.data ?? payload) as T;
   }
   throw lastError ?? new Error("飞书 CLI 请求失败。");
+}
+
+export async function runBaseCommand<T>(
+  config: BitableConfig,
+  command: string,
+  args: string[],
+  options?: { cwd?: string },
+) {
+  return runLarkCommand<T>(config, ["base", command, ...args], options);
+}
+
+async function renameBitableBase(config: BitableConfig, title: string) {
+  await runLarkCommand<Record<string, never>>(
+    config,
+    [
+      "drive",
+      "files",
+      "patch",
+      "--file-token",
+      config.appToken,
+      "--type",
+      "bitable",
+      "--data",
+      JSON.stringify({ new_title: title }),
+      "--format",
+      "json",
+    ],
+  );
 }
 
 export function extractBaseToken(value: string) {
@@ -369,7 +394,20 @@ export async function setRegisteredApplicationName(id: string, name: string) {
   const records = await listRecords(registryConfig, registry.tableId);
   const existing = records.find((record) => asText(record.fields["配置ID"]) === id);
   if (!existing) throw new Error("找不到指定的工作坊配置。");
-  await updateRecord(registryConfig, registry.tableId, existing.record_id, { "配置名称": name });
+  const targetConfig: BitableConfig = {
+    ...getCliRuntime(),
+    appToken: asText(existing.fields["BaseToken"]),
+    projectsTableId: asText(existing.fields["项目表ID"]),
+    scoresTableId: asText(existing.fields["评分表ID"]),
+  };
+  if (!targetConfig.appToken) throw new Error("工作坊配置缺少 Base Token，无法修改 Base 文件名。");
+  await renameBitableBase(targetConfig, name);
+  try {
+    await updateRecord(registryConfig, registry.tableId, existing.record_id, { "配置名称": name });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "未知错误";
+    throw new Error(`目标 Base 已改名，但配置中心同步失败：${message}。请重试同一名称。`);
+  }
   return { id, name };
 }
 

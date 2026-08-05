@@ -111,7 +111,7 @@ export default function AdminPage() {
     const nextName = editingName.trim();
     if (!nextName || busy) return;
     setBusy(true);
-    setMessage(`正在更新「${application.name}」的名称…`);
+    setMessage(`正在修改「${application.name}」对应的飞书 Base 文件名…`);
     try {
       const response = await fetch("/api/configurations", {
         method: "PATCH",
@@ -123,7 +123,7 @@ export default function AdminPage() {
       setApplications(payload.applications ?? []);
       setEditingId("");
       setEditingName("");
-      setMessage(`工作坊已改名为「${nextName}」，原评委链接继续有效。`);
+      setMessage(`飞书 Base 与工作坊配置均已改名为「${nextName}」，原评委链接继续有效。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "修改名称失败");
     } finally {
@@ -251,7 +251,7 @@ export default function AdminPage() {
                 <a href={application.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>
                 <a href={judgePath(application.id)} target="_blank" rel="noreferrer">打开评委链接</a>
                 <button onClick={() => void copyJudgeLink(application)}>复制评委链接</button>
-                <button disabled={busy || editingId === application.id} onClick={() => { setEditingId(application.id); setEditingName(application.name); }}>修改名称</button>
+                <button disabled={busy || editingId === application.id} onClick={() => { setEditingId(application.id); setEditingName(application.name); }}>修改 Base 名称</button>
                 <button disabled={busy} onClick={() => void toggleApplication(application)}>
                   {application.enabled ? "从评委端隐藏" : "启用并展示"}
                 </button>
