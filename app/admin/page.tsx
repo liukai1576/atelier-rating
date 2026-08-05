@@ -29,7 +29,17 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
-  const loadAdmin = async (key: string) => {
+  const authenticateAdmin = async (key: string) => {
+    const response = await fetch("/api/configurations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "authenticate", adminKey: key }),
+    });
+    const payload = await response.json() as { authenticated?: boolean; message?: string };
+    if (!response.ok || !payload.authenticated) throw new Error(payload.message || "管理密钥不正确。");
+  };
+
+  const loadApplications = async (key: string) => {
     const response = await fetch("/api/configurations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -40,11 +50,9 @@ export default function AdminPage() {
       templateUrl?: string;
       message?: string;
     };
-    if (!response.ok) throw new Error(payload.message || "无法进入配置后台。");
+    if (!response.ok) throw new Error(payload.message || "读取飞书配置失败。");
     setApplications(payload.applications ?? []);
     setTemplateUrl(payload.templateUrl ?? "");
-    setAuthenticated(true);
-    window.sessionStorage.setItem(ADMIN_SESSION_KEY, key);
   };
 
   const signIn = async () => {
@@ -52,8 +60,16 @@ export default function AdminPage() {
     setBusy(true);
     setMessage("正在验证管理权限…");
     try {
-      await loadAdmin(adminKey);
-      setMessage("");
+      await authenticateAdmin(adminKey);
+      setAuthenticated(true);
+      window.sessionStorage.setItem(ADMIN_SESSION_KEY, adminKey);
+      setMessage("管理权限验证成功，正在读取飞书配置…");
+      try {
+        await loadApplications(adminKey);
+        setMessage("");
+      } catch (error) {
+        setMessage(error instanceof Error ? `${error.message} 可点击“重新读取配置”重试。` : "读取飞书配置失败，可重试。");
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "管理密钥不正确。");
     } finally {
@@ -149,6 +165,14 @@ export default function AdminPage() {
         </div>
         <div className="admin-header-actions">
           <Link href="/">返回评分台</Link>
+          <button disabled={busy} onClick={() => {
+            setBusy(true);
+            setMessage("正在重新读取飞书配置…");
+            void loadApplications(adminKey)
+              .then(() => setMessage("配置已刷新。"))
+              .catch((error) => setMessage(error instanceof Error ? error.message : "读取飞书配置失败"))
+              .finally(() => setBusy(false));
+          }}>重新读取配置</button>
           <button onClick={() => {
             window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
             setAuthenticated(false);

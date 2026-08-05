@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json() as {
-      action?: "list";
+      action?: "authenticate" | "list";
       adminKey?: string;
       name?: string;
       baseUrl?: string;
@@ -64,6 +64,9 @@ export async function POST(request: NextRequest) {
     }
     if (!hasAdminAccess(request, payload.adminKey)) {
       return NextResponse.json({ saved: false, message: "管理密钥不正确。" }, { status: 401 });
+    }
+    if (payload.action === "authenticate") {
+      return NextResponse.json({ authenticated: true });
     }
     if (payload.action === "list") {
       const applications = await listRegisteredApplications();

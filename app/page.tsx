@@ -433,18 +433,15 @@ export default function Home() {
     const initialize = async () => {
       try {
         const requestedId = new URL(window.location.href).searchParams.get("app")?.trim() || "";
-        if (!requestedId) {
-          setLinkState("invalid");
-          setHydrated(true);
-          return;
-        }
         const response = await fetch("/api/configurations", { cache: "no-store" });
         const payload = await response.json() as {
           applications?: RatingApplication[];
         };
         if (cancelled) return;
         const nextApplications = payload.applications ?? [];
-        const requestedApplication = nextApplications.find((item) => item.id === requestedId && item.enabled);
+        const requestedApplication = requestedId
+          ? nextApplications.find((item) => item.id === requestedId && item.enabled)
+          : nextApplications.find((item) => item.enabled);
         if (!requestedApplication) {
           setLinkState("invalid");
           setHydrated(true);
@@ -452,6 +449,11 @@ export default function Home() {
         }
         setActiveApplicationId(requestedApplication.id);
         setActiveApplicationName(requestedApplication.name);
+        if (!requestedId) {
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.set("app", requestedApplication.id);
+          window.history.replaceState(null, "", nextUrl);
+        }
         setLinkState("valid");
         await loadApplication(requestedApplication.id);
       } catch {
@@ -817,7 +819,7 @@ export default function Home() {
           <h1>{linkState === "checking" ? "正在验证评分链接" : "需要工作坊专属链接"}</h1>
           <p>{linkState === "checking"
             ? "正在确认这个链接对应的评分项目…"
-            : "此链接没有指定有效的评分项目，或者该项目尚未开放。请向工作坊组织者索取专属评委链接。"}</p>
+            : "此链接指定的评分项目不存在或尚未开放。请向工作坊组织者索取新的专属评委链接。"}</p>
         </section>
       </main>
     );

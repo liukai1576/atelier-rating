@@ -92,44 +92,65 @@ export async function runBaseCommand<T>(
   ];
   if (config.profile) cliArgs.push("--profile", config.profile);
 
-  let stdout = "";
-  let stderr = "";
-  try {
-    const result = await execFileAsync(config.cliBin, cliArgs, {
-      cwd: options?.cwd,
-      encoding: "utf8",
-      maxBuffer: 20 * 1024 * 1024,
-      timeout: 45_000,
-    });
-    stdout = result.stdout;
-    stderr = result.stderr;
-  } catch (error) {
-    const failure = error as Error & { stdout?: string; stderr?: string };
-    stdout = failure.stdout ?? "";
-    stderr = failure.stderr ?? "";
-    if (!stdout.trim()) {
-      try {
-        const parsed = JSON.parse(stderr) as CliEnvelope<unknown>;
-        const detail = [parsed.error?.message, parsed.error?.hint].filter(Boolean).join("；");
-        throw new Error(`飞书 CLI 请求失败：${detail || failure.message}`);
-      } catch (parseError) {
-        if (parseError instanceof Error && parseError.message.startsWith("飞书 CLI 请求失败")) throw parseError;
-        throw new Error(`飞书 CLI 执行失败：${stderr.trim() || failure.message}`);
+  const transient = (message: string) => /\bEOF\b|ECONNRESET|ETIMEDOUT|ECONNREFUSED|socket hang up|oauth\/v3\/token|temporary|temporarily/i.test(message);
+  let lastError: Error | undefined;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    let stdout = "";
+    let stderr = "";
+    try {
+      const result = await execFileAsync(config.cliBin, cliArgs, {
+        cwd: options?.cwd,
+        encoding: "utf8",
+        maxBuffer: 20 * 1024 * 1024,
+        timeout: 45_000,
+      });
+      stdout = result.stdout;
+      stderr = result.stderr;
+    } catch (error) {
+      const failure = error as Error & { stdout?: string; stderr?: string };
+      stdout = failure.stdout ?? "";
+      stderr = failure.stderr ?? "";
+      if (!stdout.trim()) {
+        let message = stderr.trim() || failure.message;
+        try {
+          const parsed = JSON.parse(stderr) as CliEnvelope<unknown>;
+          message = [parsed.error?.message, parsed.error?.hint].filter(Boolean).join("；") || message;
+        } catch {
+          // Keep the original CLI error text when stderr is not JSON.
+        }
+        lastError = new Error(`飞书 CLI 请求失败：${message}`);
+        if (attempt < 3 && transient(message)) {
+          await new Promise((resolve) => setTimeout(resolve, attempt * 600));
+          continue;
+        }
+        throw lastError;
       }
     }
-  }
 
-  let payload: CliEnvelope<T>;
-  try {
-    payload = JSON.parse(stdout) as CliEnvelope<T>;
-  } catch {
-    throw new Error(`飞书 CLI 返回了非 JSON 内容：${stderr.trim() || stdout.trim()}`);
+    let payload: CliEnvelope<T>;
+    try {
+      payload = JSON.parse(stdout) as CliEnvelope<T>;
+    } catch {
+      const message = stderr.trim() || stdout.trim();
+      lastError = new Error(`飞书 CLI 返回了非 JSON 内容：${message}`);
+      if (attempt < 3 && transient(message)) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 600));
+        continue;
+      }
+      throw lastError;
+    }
+    if (payload.ok === false) {
+      const detail = [payload.error?.message, payload.error?.hint].filter(Boolean).join("；") || "未知错误";
+      lastError = new Error(`飞书 CLI 请求失败：${detail}`);
+      if (attempt < 3 && transient(detail)) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 600));
+        continue;
+      }
+      throw lastError;
+    }
+    return (payload.data ?? payload) as T;
   }
-  if (payload.ok === false) {
-    const detail = [payload.error?.message, payload.error?.hint].filter(Boolean).join("；");
-    throw new Error(`飞书 CLI 请求失败：${detail || "未知错误"}`);
-  }
-  return (payload.data ?? payload) as T;
+  throw lastError ?? new Error("飞书 CLI 请求失败。");
 }
 
 export function extractBaseToken(value: string) {
