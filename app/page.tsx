@@ -342,8 +342,8 @@ export default function Home() {
         if (!response.ok) throw new Error(payload.message || "读取工作坊配置失败");
         const nextApplications = payload.applications ?? [];
         const requestedApplication = requestedId
-          ? nextApplications.find((item) => item.id === requestedId && item.enabled)
-          : nextApplications.find((item) => item.enabled);
+          ? nextApplications.find((item) => item.id === requestedId)
+          : nextApplications[0];
         if (!requestedApplication) {
           setLinkState("invalid");
           setHydrated(true);

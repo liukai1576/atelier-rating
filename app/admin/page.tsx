@@ -249,32 +249,7 @@ export default function AdminPage() {
     }
   };
 
-  const toggleApplication = async (application: RatingApplication) => {
-    if (busy) return;
-    setBusy(true);
-    setMessage(`正在${application.enabled ? "停用" : "启用"}「${application.name}」…`);
-    try {
-      const response = await fetch("/api/configurations", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: application.id, enabled: !application.enabled, adminKey }),
-      });
-      const payload = await response.json() as { saved?: boolean; applications?: RatingApplication[]; message?: string };
-      if (!response.ok || !payload.saved) throw new Error(payload.message || "更新状态失败");
-      setApplications(payload.applications ?? []);
-      setMessage(`「${application.name}」已${application.enabled ? "停用" : "启用"}。`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "更新状态失败");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const copyJudgeLink = async (application: RatingApplication) => {
-    if (!application.enabled) {
-      setMessage(`「${application.name}」仍处于隐藏状态，请先填写项目与评委并启用。`);
-      return;
-    }
     const url = `${window.location.origin}${judgePath(application.id)}`;
     await window.navigator.clipboard.writeText(url);
     setMessage(`已复制「${application.name}」的评委专属链接。`);
@@ -303,7 +278,7 @@ export default function AdminPage() {
     );
   }
 
-  const returnApplication = applications.find((application) => application.enabled) ?? applications[0];
+  const returnApplication = applications[0];
   const returnPath = returnApplication ? judgePath(returnApplication.id) : "/";
 
   return (
@@ -372,9 +347,9 @@ export default function AdminPage() {
         <section className="application-list" aria-label="已配置工作坊">
           <header><div><span className="eyebrow">CONNECTED WORKSHOPS</span><h2>已配置工作坊</h2></div><strong>{applications.length}</strong></header>
           {applications.map((application) => (
-            <article className={application.enabled ? "active" : ""} key={application.id}>
+            <article className="active" key={application.id}>
               <div>
-                <small>{application.enabled ? "评委可见" : "已隐藏"}</small>
+                <small>评分台可访问</small>
                 {editingId === application.id ? (
                   <div className="application-name-editor">
                     <input aria-label="工作坊名称" value={editingName} onChange={(event) => setEditingName(event.target.value)} autoFocus />
@@ -386,19 +361,10 @@ export default function AdminPage() {
               </div>
               <div className="application-actions">
                 <a href={application.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>
-                {application.enabled ? (
-                  <>
-                    <a href={judgePath(application.id)} target="_blank" rel="noreferrer">打开评委链接</a>
-                    <button onClick={() => void copyJudgeLink(application)}>复制评委链接</button>
-                  </>
-                ) : (
-                  <span className="application-hidden-note">填写数据并启用后开放评分台</span>
-                )}
+                <a href={judgePath(application.id)} target="_blank" rel="noreferrer">打开评委链接</a>
+                <button onClick={() => void copyJudgeLink(application)}>复制评委链接</button>
                 <button disabled={busy} onClick={() => void loadRubric(application)}>配置评分标准</button>
                 <button disabled={busy || editingId === application.id} onClick={() => { setEditingId(application.id); setEditingName(application.name); }}>修改 Base 名称</button>
-                <button disabled={busy} onClick={() => void toggleApplication(application)}>
-                  {application.enabled ? "从评委端隐藏" : "启用并展示"}
-                </button>
               </div>
               {rubricApplicationId === application.id && (
                 <section className="application-rubric-panel">

@@ -4,7 +4,6 @@ import {
   resolveExactBitableConfig,
   saveRegisteredApplication,
   saveCriteriaRecords,
-  setRegisteredApplicationEnabled,
   setRegisteredApplicationName,
   validateBaseTemplate,
 } from "@/lib/bitable";
@@ -47,7 +46,6 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({
       applications: applications
-        .filter((item) => item.enabled)
         .map(({ id, name, enabled, order }) => ({ id, name, enabled, order })),
     });
   } catch (error) {
@@ -125,7 +123,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const payload = await request.json() as { id?: string; enabled?: boolean; name?: string; adminKey?: string };
+    const payload = await request.json() as { id?: string; name?: string; adminKey?: string };
     if (!ADMIN_KEY) {
       return NextResponse.json({ saved: false, message: "服务器尚未配置 ATELIER_CONFIG_ADMIN_KEY。" }, { status: 503 });
     }
@@ -133,11 +131,10 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ saved: false, message: "管理密钥不正确。" }, { status: 401 });
     }
     const nextName = payload.name?.trim();
-    if (!payload.id || (typeof payload.enabled !== "boolean" && !nextName)) {
+    if (!payload.id || !nextName) {
       return NextResponse.json({ saved: false, message: "缺少工作坊 ID 或需要更新的内容。" }, { status: 400 });
     }
     if (nextName) await setRegisteredApplicationName(payload.id, nextName);
-    if (typeof payload.enabled === "boolean") await setRegisteredApplicationEnabled(payload.id, payload.enabled);
     const applications = await listRegisteredApplications();
     return NextResponse.json({ saved: true, applications });
   } catch (error) {

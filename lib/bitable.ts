@@ -301,8 +301,8 @@ export async function resolveBitableConfig(applicationId?: string | null): Promi
   const applications = await listRegisteredApplications();
   const requestedId = applicationId?.trim() || "";
   const application = requestedId
-    ? applications.find((item) => item.id === requestedId && item.enabled)
-    : applications.find((item) => item.enabled);
+    ? applications.find((item) => item.id === requestedId)
+    : applications[0];
   if (!application) return getRegistryCoordinates() ? null : getBitableConfig();
   return {
     ...getCliRuntime(),
@@ -433,22 +433,6 @@ export async function saveRegisteredApplication(input: {
   if (existing) await updateRecord(registryConfig, registry.tableId, existing.record_id, fields);
   else await createRecord(registryConfig, registry.tableId, fields);
   return { ...input, id: stableId };
-}
-
-export async function setRegisteredApplicationEnabled(id: string, enabled: boolean) {
-  const registry = getRegistryCoordinates();
-  if (!registry) throw new Error("服务器尚未配置飞书工作坊配置中心。");
-  const registryConfig: BitableConfig = {
-    ...getCliRuntime(),
-    appToken: registry.appToken,
-    projectsTableId: registry.tableId,
-    scoresTableId: registry.tableId,
-  };
-  const records = await listRecords(registryConfig, registry.tableId);
-  const existing = records.find((record) => asText(record.fields["配置ID"]) === id);
-  if (!existing) throw new Error("找不到指定的工作坊配置。");
-  await updateRecord(registryConfig, registry.tableId, existing.record_id, { "启用": enabled });
-  return { id, enabled };
 }
 
 export async function setRegisteredApplicationName(id: string, name: string) {

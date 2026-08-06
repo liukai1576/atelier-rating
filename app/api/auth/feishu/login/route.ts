@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     const applicationId = request.nextUrl.searchParams.get("appId")?.trim() || "";
     if (!applicationId || !(await resolveBitableConfig(applicationId))) {
-      return NextResponse.json({ message: "工作坊链接无效、尚未配置或尚未开放。" }, { status: 404 });
+      return NextResponse.json({ message: "工作坊链接无效或尚未配置。" }, { status: 404 });
     }
     const returnTo = safeReturnTo(request.nextUrl.searchParams.get("returnTo"));
     const { appId } = getFeishuOAuthCredentials();

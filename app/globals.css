@@ -2292,16 +2292,6 @@ textarea:disabled {
   place-items: center;
 }
 
-.application-hidden-note {
-  display: inline-flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 11px;
-  border: 1px dashed #cbd5e1;
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 700;
-}
 
 .award-visual::before,
 .award-visual::after {
