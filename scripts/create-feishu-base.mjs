@@ -35,6 +35,24 @@ const projectFields = [
   { name: "启用", type: "checkbox" },
 ];
 
+const rubricFields = [
+  { name: "维度ID", type: "text" },
+  { name: "排序", type: "number" },
+  { name: "权重", type: "number" },
+  { name: "维度名称", type: "text" },
+  { name: "维度简称", type: "text" },
+  { name: "维度简介", type: "text" },
+  { name: "低分标题", type: "text" },
+  { name: "低分说明", type: "text" },
+  { name: "中分标题", type: "text" },
+  { name: "中分说明", type: "text" },
+  { name: "高分标题", type: "text" },
+  { name: "高分说明", type: "text" },
+  { name: "模板类型", type: "text" },
+  { name: "标准版本", type: "text" },
+  { name: "启用", type: "checkbox" },
+];
+
 const scoreFields = [
   { name: "评分唯一键", type: "text" },
   { name: "工作坊ID", type: "text" },
@@ -44,12 +62,13 @@ const scoreFields = [
   { name: "项目组", type: "text" },
   { name: "评委ID", type: "text" },
   { name: "评委姓名", type: "text" },
-  { name: "问题定义", type: "number" },
-  { name: "用户与业务价值", type: "number" },
-  { name: "方案创新性", type: "number" },
-  { name: "可行性与完成度", type: "number" },
-  { name: "影响力与可推广性", type: "number" },
-  { name: "表达与答辩", type: "number" },
+  { name: "D1得分", type: "number" },
+  { name: "D2得分", type: "number" },
+  { name: "D3得分", type: "number" },
+  { name: "D4得分", type: "number" },
+  { name: "D5得分", type: "number" },
+  { name: "D6得分", type: "number" },
+  { name: "评分标准版本", type: "text" },
   { name: "加权总分", type: "number" },
   { name: "提名", type: "checkbox" },
   { name: "评审笔记", type: "text" },
@@ -105,6 +124,7 @@ const created = run([
 const baseToken = created.base.base_token;
 const workshopsTableId = created.table.id;
 const projects = run(["base", "+table-create", "--base-token", baseToken, "--name", "项目", "--fields", JSON.stringify(projectFields)]);
+const rubrics = run(["base", "+table-create", "--base-token", baseToken, "--name", "评分标准", "--fields", JSON.stringify(rubricFields)]);
 const scores = run(["base", "+table-create", "--base-token", baseToken, "--name", "评分", "--fields", JSON.stringify(scoreFields)]);
 const judges = run(["base", "+table-create", "--base-token", baseToken, "--name", "评委", "--fields", JSON.stringify(judgeFields)]);
 const teams = run(["base", "+table-create", "--base-token", baseToken, "--name", "项目组", "--fields", JSON.stringify(teamFields)]);
@@ -115,6 +135,7 @@ const result = {
   baseToken,
   tables: {
     workshops: workshopsTableId,
+    rubrics: rubrics.table.id,
     projects: projects.table.id,
     scores: scores.table.id,
     judges: judges.table.id,
@@ -123,6 +144,7 @@ const result = {
   env: [
     `FEISHU_BITABLE_APP_TOKEN=${baseToken}`,
     `FEISHU_WORKSHOPS_TABLE_ID=${workshopsTableId}`,
+    `FEISHU_RUBRICS_TABLE_ID=${rubrics.table.id}`,
     `FEISHU_PROJECTS_TABLE_ID=${projects.table.id}`,
     `FEISHU_SCORES_TABLE_ID=${scores.table.id}`,
     `FEISHU_TEAMS_TABLE_ID=${teams.table.id}`,

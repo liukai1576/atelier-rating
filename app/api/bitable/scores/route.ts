@@ -7,17 +7,9 @@ import {
   resolveBitableConfig,
   updateRecord,
 } from "@/lib/bitable";
+import { SCORE_FIELD_BY_CRITERION_ID } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
-
-const scoreFields: Record<string, string> = {
-  problem: "问题定义",
-  value: "用户与业务价值",
-  innovation: "方案创新性",
-  feasibility: "可行性与完成度",
-  impact: "影响力与可推广性",
-  presentation: "表达与答辩",
-};
 
 type ScorePayload = {
   workshop: { id: string; name: string };
@@ -29,6 +21,7 @@ type ScorePayload = {
     note: string;
   };
   weightedTotal: number;
+  scoringVersion: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -53,6 +46,7 @@ export async function POST(request: NextRequest) {
       "评委ID": payload.judge.id,
       "评委姓名": payload.judge.name,
       "加权总分": payload.weightedTotal,
+      "评分标准版本": payload.scoringVersion || "V1",
       "提名": payload.scoreCard.nomination === true,
       "评审笔记": payload.scoreCard.note ?? "",
       "提交时间": new Intl.DateTimeFormat("sv-SE", {
@@ -67,7 +61,7 @@ export async function POST(request: NextRequest) {
       }).format(new Date()),
       "已锁票": false,
     };
-    Object.entries(scoreFields).forEach(([key, fieldName]) => {
+    Object.entries(SCORE_FIELD_BY_CRITERION_ID).forEach(([key, fieldName]) => {
       const value = payload.scoreCard.scores[key];
       if (typeof value === "number" && Number.isFinite(value)) fields[fieldName] = value;
     });

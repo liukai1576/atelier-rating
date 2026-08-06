@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   listRegisteredApplications,
+  resolveExactBitableConfig,
   saveRegisteredApplication,
+  saveCriteriaRecords,
   setRegisteredApplicationEnabled,
   setRegisteredApplicationName,
   validateBaseTemplate,
 } from "@/lib/bitable";
+import type { Criterion, ScoringTemplateId } from "@/lib/scoring";
+import { cloneCriteria, SCORING_TEMPLATES, validateCriteria } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +63,8 @@ export async function POST(request: NextRequest) {
       adminKey?: string;
       name?: string;
       baseUrl?: string;
+      templateId?: ScoringTemplateId;
+      criteria?: Criterion[];
     };
     if (!ADMIN_KEY) {
       return NextResponse.json({ saved: false, message: "服务器尚未配置 ATELIER_CONFIG_ADMIN_KEY。" }, { status: 503 });
@@ -89,13 +95,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ saved: false, validation, message: problems.join("；") || "表格不符合评分模板。" }, { status: 422 });
     }
     const id = makeId(name, validation.appToken);
-    await saveRegisteredApplication({
+    const templateId = payload.templateId === "personal" ? "personal" : "team";
+    const criteria = payload.criteria?.length
+      ? payload.criteria
+      : cloneCriteria(SCORING_TEMPLATES[templateId].criteria);
+    const criteriaError = validateCriteria(criteria);
+    if (criteriaError) {
+      return NextResponse.json({ saved: false, message: criteriaError }, { status: 400 });
+    }
+    const savedApplication = await saveRegisteredApplication({
       id,
       name,
       baseUrl: validation.baseUrl,
       appToken: validation.appToken,
       tables: validation.tables,
     });
+    const targetConfig = await resolveExactBitableConfig(savedApplication.id);
+    if (!targetConfig) throw new Error("工作坊已注册，但无法回读评分标准配置。");
+    await saveCriteriaRecords(targetConfig, criteria, templateId, "V1");
     const applications = await listRegisteredApplications();
     const application = applications.find((item) => item.id === id)
       ?? applications.find((item) => item.appToken === validation.appToken);

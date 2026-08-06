@@ -10,7 +10,8 @@
     "build": "next build --webpack",
     "start": "next start -p 3210",
     "lint": "eslint . --ignore-pattern .next",
-    "create:base": "node scripts/create-feishu-base.mjs"
+    "create:base": "node scripts/create-feishu-base.mjs",
+    "migrate:scoring": "node --env-file=.env.local scripts/migrate-scoring-schema.mjs"
   },
   "dependencies": {
     "next": "16.2.6",

@@ -2015,6 +2015,107 @@ textarea:disabled {
   box-shadow: 0 0 0 3px rgba(16, 24, 40, 0.06);
 }
 
+.template-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 24px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.template-picker legend {
+  grid-column: 1 / -1;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.template-picker button {
+  display: grid;
+  gap: 4px;
+  min-height: 66px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: #fbfcfe;
+  color: var(--ink);
+  text-align: left;
+}
+
+.template-picker button.active {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.template-picker button span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.rubric-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.rubric-editor > article {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: #fbfcfe;
+}
+
+.rubric-editor > article > header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.rubric-editor label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rubric-editor input,
+.rubric-editor textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.rubric-editor details {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.rubric-editor summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.rubric-band-editor {
+  display: grid;
+  grid-template-columns: 48px minmax(100px, 0.35fr) 1fr;
+  gap: 8px;
+  align-items: start;
+  margin-top: 10px;
+}
+
+.rubric-band-editor strong {
+  padding-top: 12px;
+}
+
 .config-submit {
   width: 100%;
   min-height: 50px;
@@ -2054,8 +2155,9 @@ textarea:disabled {
   font-weight: 400;
 }
 
-.application-list article {
+.application-list > article {
   display: flex;
+  flex-wrap: wrap;
   gap: 18px;
   align-items: center;
   justify-content: space-between;
@@ -2063,14 +2165,39 @@ textarea:disabled {
   border-top: 1px solid var(--line);
 }
 
-.application-list article.active {
+.application-rubric-panel {
+  flex: 0 0 100%;
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+
+.application-rubric-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.application-rubric-panel > header div {
+  display: grid;
+  gap: 4px;
+}
+
+.application-rubric-panel > header button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.application-list > article.active {
   margin-inline: -14px;
   padding-inline: 14px;
   border-left: 3px solid var(--ink);
   background: #f8fafc;
 }
 
-.application-list article small {
+.application-list > article small {
   color: var(--green);
   font-size: 9px;
   font-weight: 800;
@@ -2078,7 +2205,7 @@ textarea:disabled {
   text-transform: uppercase;
 }
 
-.application-list article h3 {
+.application-list > article h3 {
   margin: 5px 0 0;
   font-size: 16px;
 }
@@ -2784,7 +2911,7 @@ textarea:disabled {
     grid-template-columns: 1fr;
   }
 
-  .application-list article {
+  .application-list > article {
     display: block;
   }
 
@@ -2865,6 +2992,15 @@ textarea:disabled {
 
   .award-pagination button {
     border-bottom: 1px solid var(--line);
+  }
+
+  .template-picker,
+  .rubric-band-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .rubric-band-editor strong {
+    padding-top: 0;
   }
 
   .submit-dialog {

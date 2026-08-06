@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import type { Criterion, ScoringTemplateId } from "@/lib/scoring";
+import { cloneCriteria, SCORING_TEMPLATES } from "@/lib/scoring";
 
 type RatingApplication = {
   id: string;
@@ -9,6 +11,7 @@ type RatingApplication = {
   baseUrl: string;
   appToken: string;
   workshopsTableId: string;
+  rubricsTableId: string;
   projectsTableId: string;
   scoresTableId: string;
   judgesTableId: string;
@@ -20,6 +23,54 @@ type RatingApplication = {
 const ADMIN_SESSION_KEY = "atelier-config-admin-key";
 const judgePath = (id: string) => `/?app=${encodeURIComponent(id)}`;
 
+function CriteriaEditor({
+  criteria,
+  disabled,
+  onChange,
+}: {
+  criteria: Criterion[];
+  disabled?: boolean;
+  onChange: (criteria: Criterion[]) => void;
+}) {
+  const update = (index: number, patch: Partial<Criterion>) => {
+    const next = cloneCriteria(criteria);
+    next[index] = { ...next[index], ...patch };
+    onChange(next);
+  };
+  const updateRubric = (criterionIndex: number, rubricIndex: number, field: "title" | "text", value: string) => {
+    const next = cloneCriteria(criteria);
+    next[criterionIndex].rubrics[rubricIndex][field] = value;
+    onChange(next);
+  };
+  return (
+    <div className="rubric-editor">
+      {criteria.map((criterion, index) => (
+        <article key={criterion.id}>
+          <header><strong>{criterion.id.toUpperCase()}</strong><span>{criterion.weight}%</span></header>
+          <label>
+            <span>维度名称</span>
+            <input disabled={disabled} value={criterion.name} onChange={(event) => update(index, { name: event.target.value, shortName: event.target.value.slice(0, 6) })} />
+          </label>
+          <label>
+            <span>维度简介</span>
+            <textarea disabled={disabled} value={criterion.description} onChange={(event) => update(index, { description: event.target.value })} />
+          </label>
+          <details>
+            <summary>低、中、高分判定</summary>
+            {criterion.rubrics.map((rubric, rubricIndex) => (
+              <div className="rubric-band-editor" key={rubric.range}>
+                <strong>{rubric.range}</strong>
+                <input disabled={disabled} aria-label={`${criterion.name}${rubric.range}标题`} value={rubric.title} onChange={(event) => updateRubric(index, rubricIndex, "title", event.target.value)} />
+                <textarea disabled={disabled} aria-label={`${criterion.name}${rubric.range}说明`} value={rubric.text} onChange={(event) => updateRubric(index, rubricIndex, "text", event.target.value)} />
+              </div>
+            ))}
+          </details>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
@@ -27,8 +78,14 @@ export default function AdminPage() {
   const [templateUrl, setTemplateUrl] = useState("");
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
+  const [templateId, setTemplateId] = useState<ScoringTemplateId>("team");
+  const [criteria, setCriteria] = useState<Criterion[]>(() => cloneCriteria(SCORING_TEMPLATES.team.criteria));
   const [editingId, setEditingId] = useState("");
   const [editingName, setEditingName] = useState("");
+  const [rubricApplicationId, setRubricApplicationId] = useState("");
+  const [rubricTemplateId, setRubricTemplateId] = useState<ScoringTemplateId>("team");
+  const [rubricCriteria, setRubricCriteria] = useState<Criterion[]>([]);
+  const [rubricLocked, setRubricLocked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -83,12 +140,12 @@ export default function AdminPage() {
   const saveConfiguration = async () => {
     if (!name.trim() || !baseUrl.trim() || busy) return;
     setBusy(true);
-    setMessage("正在读取 Base 并校验五张业务表…");
+    setMessage("正在读取 Base 并校验六张业务表…");
     try {
       const response = await fetch("/api/configurations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), baseUrl: baseUrl.trim(), adminKey }),
+        body: JSON.stringify({ name: name.trim(), baseUrl: baseUrl.trim(), templateId, criteria, adminKey }),
       });
       const payload = await response.json() as {
         saved?: boolean;
@@ -100,9 +157,69 @@ export default function AdminPage() {
       setApplications(payload.applications ?? []);
       setName("");
       setBaseUrl("");
+      setTemplateId("team");
+      setCriteria(cloneCriteria(SCORING_TEMPLATES.team.criteria));
       setMessage(`已加入系统：${payload.application?.name ?? "新工作坊"}。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const chooseTemplate = (
+    nextTemplate: ScoringTemplateId,
+    setTemplate: (value: ScoringTemplateId) => void,
+    setValues: (value: Criterion[]) => void,
+  ) => {
+    setTemplate(nextTemplate);
+    setValues(cloneCriteria(SCORING_TEMPLATES[nextTemplate].criteria));
+  };
+
+  const loadRubric = async (application: RatingApplication) => {
+    if (busy) return;
+    setBusy(true);
+    setMessage(`正在读取「${application.name}」的评分标准…`);
+    try {
+      const response = await fetch(`/api/configurations/rubric?appId=${encodeURIComponent(application.id)}`, {
+        headers: { "x-atelier-admin-key": adminKey },
+        cache: "no-store",
+      });
+      const payload = await response.json() as {
+        criteria?: Criterion[];
+        templateId?: ScoringTemplateId;
+        locked?: boolean;
+        scoreCount?: number;
+        message?: string;
+      };
+      if (!response.ok || !payload.criteria) throw new Error(payload.message || "读取评分标准失败");
+      setRubricApplicationId(application.id);
+      setRubricTemplateId(payload.templateId === "personal" ? "personal" : "team");
+      setRubricCriteria(cloneCriteria(payload.criteria));
+      setRubricLocked(Boolean(payload.locked));
+      setMessage(payload.locked ? `已有 ${payload.scoreCount ?? 0} 份评分，标准已锁定。` : "评分标准可以修改，保存后将直接写入该工作坊的 Base。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "读取评分标准失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveRubric = async () => {
+    if (!rubricApplicationId || rubricLocked || busy) return;
+    setBusy(true);
+    setMessage("正在把评分标准写入飞书多维表格…");
+    try {
+      const response = await fetch("/api/configurations/rubric", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId: rubricApplicationId, templateId: rubricTemplateId, criteria: rubricCriteria, adminKey }),
+      });
+      const payload = await response.json() as { saved?: boolean; message?: string };
+      if (!response.ok || !payload.saved) throw new Error(payload.message || "保存评分标准失败");
+      setMessage("评分标准已写入该工作坊的飞书 Base。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "保存评分标准失败");
     } finally {
       setBusy(false);
     }
@@ -227,6 +344,21 @@ export default function AdminPage() {
             <span>飞书多维表格 Base 链接</span>
             <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://你的组织.feishu.cn/base/..." required />
           </label>
+          <fieldset className="template-picker">
+            <legend>评分模板</legend>
+            {(["personal", "team"] as ScoringTemplateId[]).map((item) => (
+              <button
+                className={templateId === item ? "active" : ""}
+                type="button"
+                key={item}
+                onClick={() => chooseTemplate(item, setTemplateId, setCriteria)}
+              >
+                <strong>{SCORING_TEMPLATES[item].name}</strong>
+                <span>{item === "personal" ? "强调 Demo、个人成长与反思" : "强调商业价值、收益测算与规模化"}</span>
+              </button>
+            ))}
+          </fieldset>
+          <CriteriaEditor criteria={criteria} disabled={busy} onChange={setCriteria} />
           <button className="config-submit" disabled={busy || !name.trim() || !baseUrl.trim()}>
             {busy ? "正在处理…" : "校验并加入系统"}
           </button>
@@ -246,17 +378,40 @@ export default function AdminPage() {
                     <button disabled={busy} onClick={() => { setEditingId(""); setEditingName(""); }}>取消</button>
                   </div>
                 ) : <h3>{application.name}</h3>}
-                <p>工作坊表 {application.workshopsTableId || "未配置"} · 参评项目表 {application.projectsTableId} · 评分表 {application.scoresTableId}</p>
+                <p>工作坊表 {application.workshopsTableId || "未配置"} · 评分标准表 {application.rubricsTableId || "未配置"} · 参评项目表 {application.projectsTableId} · 评分表 {application.scoresTableId}</p>
               </div>
               <div className="application-actions">
                 <a href={application.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>
                 <a href={judgePath(application.id)} target="_blank" rel="noreferrer">打开评委链接</a>
                 <button onClick={() => void copyJudgeLink(application)}>复制评委链接</button>
+                <button disabled={busy} onClick={() => void loadRubric(application)}>配置评分标准</button>
                 <button disabled={busy || editingId === application.id} onClick={() => { setEditingId(application.id); setEditingName(application.name); }}>修改 Base 名称</button>
                 <button disabled={busy} onClick={() => void toggleApplication(application)}>
                   {application.enabled ? "从评委端隐藏" : "启用并展示"}
                 </button>
               </div>
+              {rubricApplicationId === application.id && (
+                <section className="application-rubric-panel">
+                  <header>
+                    <div><strong>本工作坊评分标准</strong><small>{rubricLocked ? "已有评分，已锁定" : "直接写入飞书 Base"}</small></div>
+                    <button onClick={() => setRubricApplicationId("")}>收起</button>
+                  </header>
+                  <fieldset className="template-picker" disabled={rubricLocked}>
+                    <legend>套用模板</legend>
+                    {(["personal", "team"] as ScoringTemplateId[]).map((item) => (
+                      <button
+                        className={rubricTemplateId === item ? "active" : ""}
+                        type="button"
+                        key={item}
+                        disabled={rubricLocked}
+                        onClick={() => chooseTemplate(item, setRubricTemplateId, setRubricCriteria)}
+                      >{SCORING_TEMPLATES[item].name}</button>
+                    ))}
+                  </fieldset>
+                  <CriteriaEditor criteria={rubricCriteria} disabled={rubricLocked} onChange={setRubricCriteria} />
+                  {!rubricLocked && <button className="config-submit" disabled={busy} onClick={() => void saveRubric()}>保存到飞书评分标准表</button>}
+                </section>
+              )}
             </article>
           ))}
         </section>

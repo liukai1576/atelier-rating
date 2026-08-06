@@ -5,6 +5,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import type { Criterion, ScoringTemplateId } from "@/lib/scoring";
+import { SCORING_WEIGHTS, validateCriteria } from "@/lib/scoring";
 
 type FeishuRecord = {
   record_id: string;
@@ -17,6 +19,7 @@ type BitableConfig = {
   baseUrl?: string;
   appToken: string;
   workshopsTableId?: string;
+  rubricsTableId?: string;
   projectsTableId: string;
   scoresTableId: string;
   judgesTableId?: string;
@@ -39,8 +42,9 @@ const execFileAsync = promisify(execFile);
 
 const REQUIRED_TABLE_FIELDS: Record<string, string[]> = {
   "工作坊": ["工作坊名称", "工作坊ID", "日期", "地点", "奖项名称", "提名上限", "路演时长"],
+  "评分标准": ["维度ID", "排序", "权重", "维度名称", "维度简介", "低分标题", "低分说明", "中分标题", "中分说明", "高分标题", "高分说明", "模板类型", "标准版本", "启用"],
   "项目": ["项目名称", "项目ID", "项目组ID", "项目背景图", "排序", "启用"],
-  "评分": ["评分唯一键", "工作坊ID", "项目ID", "评委ID", "加权总分", "已锁票"],
+  "评分": ["评分唯一键", "工作坊ID", "项目ID", "评委ID", "D1得分", "D2得分", "D3得分", "D4得分", "D5得分", "D6得分", "评分标准版本", "加权总分", "已锁票"],
   "评委": ["评委姓名", "评委ID", "启用"],
   "项目组": ["项目组名称", "项目组ID", "启用"],
 };
@@ -56,6 +60,7 @@ export function getBitableConfig(): BitableConfig | null {
   return {
     appToken,
     workshopsTableId: process.env.FEISHU_WORKSHOPS_TABLE_ID?.trim() || undefined,
+    rubricsTableId: process.env.FEISHU_RUBRICS_TABLE_ID?.trim() || undefined,
     projectsTableId,
     scoresTableId,
     judgesTableId: process.env.FEISHU_JUDGES_TABLE_ID?.trim() || undefined,
@@ -225,6 +230,7 @@ export type RegisteredApplication = {
   baseUrl: string;
   appToken: string;
   workshopsTableId: string;
+  rubricsTableId: string;
   projectsTableId: string;
   scoresTableId: string;
   judgesTableId: string;
@@ -247,6 +253,7 @@ function applicationFromRecord(record: FeishuRecord): RegisteredApplication | nu
     baseUrl: asUrl(fields["Base链接"], `https://rollingdigital.feishu.cn/base/${appToken}`),
     appToken,
     workshopsTableId: asText(fields["工作坊表ID"]),
+    rubricsTableId: asText(fields["评分标准表ID"]),
     projectsTableId,
     scoresTableId,
     judgesTableId: asText(fields["评委表ID"]),
@@ -267,6 +274,7 @@ export async function listRegisteredApplications() {
       baseUrl: `https://rollingdigital.feishu.cn/base/${fallback.appToken}`,
       appToken: fallback.appToken,
       workshopsTableId: fallback.workshopsTableId ?? "",
+      rubricsTableId: fallback.rubricsTableId ?? "",
       projectsTableId: fallback.projectsTableId,
       scoresTableId: fallback.scoresTableId,
       judgesTableId: fallback.judgesTableId ?? "",
@@ -301,6 +309,26 @@ export async function resolveBitableConfig(applicationId?: string | null): Promi
     baseUrl: application.baseUrl,
     appToken: application.appToken,
     workshopsTableId: application.workshopsTableId || undefined,
+    rubricsTableId: application.rubricsTableId || undefined,
+    projectsTableId: application.projectsTableId,
+    scoresTableId: application.scoresTableId,
+    judgesTableId: application.judgesTableId || undefined,
+    teamsTableId: application.teamsTableId || undefined,
+  };
+}
+
+export async function resolveExactBitableConfig(applicationId: string): Promise<BitableConfig | null> {
+  const applications = await listRegisteredApplications();
+  const application = applications.find((item) => item.id === applicationId);
+  if (!application) return null;
+  return {
+    ...getCliRuntime(),
+    id: application.id,
+    name: application.name,
+    baseUrl: application.baseUrl,
+    appToken: application.appToken,
+    workshopsTableId: application.workshopsTableId || undefined,
+    rubricsTableId: application.rubricsTableId || undefined,
     projectsTableId: application.projectsTableId,
     scoresTableId: application.scoresTableId,
     judgesTableId: application.judgesTableId || undefined,
@@ -315,6 +343,7 @@ export async function validateBaseTemplate(baseReference: string) {
     ...getCliRuntime(),
     appToken,
     workshopsTableId: "",
+    rubricsTableId: "",
     projectsTableId: "",
     scoresTableId: "",
   };
@@ -338,6 +367,7 @@ export async function validateBaseTemplate(baseReference: string) {
     baseUrl: baseReference.includes("/base/") ? baseReference.split("?")[0] : `https://rollingdigital.feishu.cn/base/${appToken}`,
     tables: {
       workshops: matched["工作坊"]!.id,
+      rubrics: matched["评分标准"]!.id,
       projects: matched["项目"]!.id,
       scores: matched["评分"]!.id,
       judges: matched["评委"]!.id,
@@ -353,7 +383,7 @@ export async function saveRegisteredApplication(input: {
   name: string;
   baseUrl: string;
   appToken: string;
-  tables: { workshops: string; projects: string; scores: string; judges: string; teams: string };
+  tables: { workshops: string; rubrics: string; projects: string; scores: string; judges: string; teams: string };
 }) {
   const registry = getRegistryCoordinates();
   if (!registry) throw new Error("服务器尚未配置飞书工作坊配置中心。");
@@ -367,6 +397,7 @@ export async function saveRegisteredApplication(input: {
     ...getCliRuntime(),
     appToken: input.appToken,
     workshopsTableId: input.tables.workshops,
+    rubricsTableId: input.tables.rubrics,
     projectsTableId: input.tables.projects,
     scoresTableId: input.tables.scores,
     judgesTableId: input.tables.judges,
@@ -385,6 +416,7 @@ export async function saveRegisteredApplication(input: {
     "Base链接": input.baseUrl,
     "BaseToken": input.appToken,
     "工作坊表ID": input.tables.workshops,
+    "评分标准表ID": input.tables.rubrics,
     "项目表ID": input.tables.projects,
     "评分表ID": input.tables.scores,
     "项目组表ID": input.tables.teams,
@@ -433,6 +465,7 @@ export async function setRegisteredApplicationName(id: string, name: string) {
     ...getCliRuntime(),
     appToken: asText(existing.fields["BaseToken"]),
     workshopsTableId: asText(existing.fields["工作坊表ID"]),
+    rubricsTableId: asText(existing.fields["评分标准表ID"]),
     projectsTableId: asText(existing.fields["项目表ID"]),
     scoresTableId: asText(existing.fields["评分表ID"]),
   };
@@ -574,7 +607,7 @@ export async function createRecord(
 
   // Some CLI versions omit the created record ID from +record-upsert output.
   // Re-read the table and resolve the just-created row by its business key.
-  const keyField = ["评分唯一键", "配置ID"].find((field) => fields[field] !== undefined);
+  const keyField = ["评分唯一键", "配置ID", "维度ID"].find((field) => fields[field] !== undefined);
   const uniqueKey = keyField ? fields[keyField] : undefined;
   if (keyField && uniqueKey !== undefined) {
     const records = await listRecords(config, tableId);
@@ -635,6 +668,67 @@ export async function batchUpdateRecords(
       ],
     );
   }
+}
+
+export function criteriaFromRecords(records: FeishuRecord[]) {
+  const active = records
+    .filter((record) => record.fields["启用"] === undefined || asBoolean(record.fields["启用"], true))
+    .sort((left, right) => asNumber(left.fields["排序"], 99) - asNumber(right.fields["排序"], 99));
+  const criteria: Criterion[] = active.map((record, index) => ({
+    id: asText(record.fields["维度ID"], `d${index + 1}`).toLowerCase(),
+    name: asText(record.fields["维度名称"]),
+    shortName: asText(record.fields["维度简称"], asText(record.fields["维度名称"])),
+    weight: asNumber(record.fields["权重"], SCORING_WEIGHTS[index] ?? 0),
+    description: asText(record.fields["维度简介"]),
+    rubrics: [
+      { range: "0–3", title: asText(record.fields["低分标题"]), text: asText(record.fields["低分说明"]), tone: "low" },
+      { range: "4–7", title: asText(record.fields["中分标题"]), text: asText(record.fields["中分说明"]), tone: "mid" },
+      { range: "8–10", title: asText(record.fields["高分标题"]), text: asText(record.fields["高分说明"]), tone: "high" },
+    ],
+  }));
+  const error = validateCriteria(criteria);
+  if (error) throw new Error(`评分标准表配置无效：${error}`);
+  return {
+    criteria,
+    templateId: asText(active[0]?.fields["模板类型"], "team") as ScoringTemplateId,
+    version: asText(active[0]?.fields["标准版本"], "V1"),
+  };
+}
+
+export async function saveCriteriaRecords(
+  config: BitableConfig,
+  criteria: Criterion[],
+  templateId: ScoringTemplateId,
+  version = "V1",
+) {
+  if (!config.rubricsTableId) throw new Error("工作坊配置缺少评分标准表 ID。");
+  const rubricsTableId = config.rubricsTableId;
+  const error = validateCriteria(criteria);
+  if (error) throw new Error(error);
+  const records = await listRecords(config, rubricsTableId);
+  await Promise.all(criteria.map(async (item, index) => {
+    const fields = {
+      "维度ID": item.id.toUpperCase(),
+      "排序": index + 1,
+      "权重": item.weight,
+      "维度名称": item.name,
+      "维度简称": item.shortName || item.name,
+      "维度简介": item.description,
+      "低分标题": item.rubrics[0].title,
+      "低分说明": item.rubrics[0].text,
+      "中分标题": item.rubrics[1].title,
+      "中分说明": item.rubrics[1].text,
+      "高分标题": item.rubrics[2].title,
+      "高分说明": item.rubrics[2].text,
+      "模板类型": templateId,
+      "标准版本": version,
+      "启用": true,
+    };
+    const existing = records.find((record) => asText(record.fields["维度ID"]).toLowerCase() === item.id);
+    if (existing) await updateRecord(config, rubricsTableId, existing.record_id, fields);
+    else await createRecord(config, rubricsTableId, fields);
+  }));
+  return { criteria, templateId, version };
 }
 
 export function asText(value: unknown, fallback = ""): string {

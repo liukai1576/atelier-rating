@@ -1,25 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Criterion } from "@/lib/scoring";
 
 type View = "judge" | "admin" | "awards";
-type Tone = "low" | "mid" | "high";
-
-type Rubric = {
-  range: string;
-  title: string;
-  text: string;
-  tone: Tone;
-};
-
-type Criterion = {
-  id: string;
-  name: string;
-  shortName: string;
-  weight: number;
-  description: string;
-  rubrics: Rubric[];
-};
 
 type Project = {
   id: string;
@@ -66,6 +50,7 @@ type Submission = ScoreCard & {
 };
 
 type AppStore = {
+  scoringVersion: string;
   channelLocked: Record<string, boolean>;
   drafts: Record<string, Record<string, Record<string, ScoreCard>>>;
   submissions: Record<
@@ -80,81 +65,6 @@ type RatingApplication = {
   enabled: boolean;
   order: number;
 };
-
-const criteria: Criterion[] = [
-  {
-    id: "problem",
-    name: "问题定义",
-    shortName: "问题",
-    weight: 15,
-    description: "是否抓住真实、重要且值得解决的问题，并给出清晰边界。",
-    rubrics: [
-      { range: "0–3", title: "问题模糊", text: "问题来自假设，目标人群与场景不清晰。", tone: "low" },
-      { range: "4–7", title: "问题成立", text: "有真实场景支撑，影响范围与痛点基本明确。", tone: "mid" },
-      { range: "8–10", title: "洞察深刻", text: "抓住关键矛盾，有证据且问题边界高度清晰。", tone: "high" },
-    ],
-  },
-  {
-    id: "value",
-    name: "用户与业务价值",
-    shortName: "价值",
-    weight: 20,
-    description: "方案带来的用户改善、业务收益与价值验证是否充分。",
-    rubrics: [
-      { range: "0–3", title: "价值有限", text: "收益描述抽象，缺少量化依据。", tone: "low" },
-      { range: "4–7", title: "价值明确", text: "能改善核心体验或关键业务指标。", tone: "mid" },
-      { range: "8–10", title: "价值显著", text: "价值链路完整，收益可信且可被验证。", tone: "high" },
-    ],
-  },
-  {
-    id: "innovation",
-    name: "方案创新性",
-    shortName: "创新",
-    weight: 20,
-    description: "解题思路、技术组合与体验机制是否形成差异化突破。",
-    rubrics: [
-      { range: "0–3", title: "常规组合", text: "主要复用成熟做法，差异化较弱。", tone: "low" },
-      { range: "4–7", title: "局部创新", text: "在关键环节提出有价值的新方法。", tone: "mid" },
-      { range: "8–10", title: "突破创新", text: "重新定义流程或体验，优势难以替代。", tone: "high" },
-    ],
-  },
-  {
-    id: "feasibility",
-    name: "可行性与完成度",
-    shortName: "可行性",
-    weight: 15,
-    description: "方案是否能落地，原型、数据与关键风险是否得到验证。",
-    rubrics: [
-      { range: "0–3", title: "概念阶段", text: "关键假设尚未验证，落地路径不清。", tone: "low" },
-      { range: "4–7", title: "基本可行", text: "核心链路已验证，仍有少量关键风险。", tone: "mid" },
-      { range: "8–10", title: "落地就绪", text: "关键能力完整，资源、风险和计划清晰。", tone: "high" },
-    ],
-  },
-  {
-    id: "impact",
-    name: "影响力与可推广性",
-    shortName: "影响",
-    weight: 20,
-    description: "方案的覆盖规模、迁移能力与长期组织价值。",
-    rubrics: [
-      { range: "0–3", title: "单点应用", text: "只适用于单一小场景，复用空间有限。", tone: "low" },
-      { range: "4–7", title: "多场景复用", text: "可迁移到相邻团队或类似流程。", tone: "mid" },
-      { range: "8–10", title: "规模化价值", text: "具备平台化潜力，可形成组织级能力。", tone: "high" },
-    ],
-  },
-  {
-    id: "presentation",
-    name: "表达与答辩",
-    shortName: "表达",
-    weight: 10,
-    description: "叙事是否清晰，证据是否可信，现场问答是否准确有力。",
-    rubrics: [
-      { range: "0–3", title: "表达不清", text: "结构松散，关键问题未能有效回答。", tone: "low" },
-      { range: "4–7", title: "清晰完整", text: "逻辑完整，重点明确，回答基本准确。", tone: "mid" },
-      { range: "8–10", title: "专业有力", text: "叙事简洁可信，问答体现深入思考。", tone: "high" },
-    ],
-  },
-];
 
 const STORAGE_KEY = "atelier-workshop-score-desk-v1";
 
@@ -180,7 +90,7 @@ const EMPTY_PROJECT: Project = {
   duration: "",
 };
 
-function weightedTotal(scores: Record<string, number>) {
+function weightedTotal(scores: Record<string, number>, criteria: Criterion[]) {
   return criteria.reduce(
     (sum, criterion) =>
       sum + (typeof scores[criterion.id] === "number"
@@ -190,12 +100,13 @@ function weightedTotal(scores: Record<string, number>) {
   );
 }
 
-function scoreCount(scores: Record<string, number>) {
+function scoreCount(scores: Record<string, number>, criteria: Criterion[]) {
   return criteria.filter((criterion) => typeof scores[criterion.id] === "number").length;
 }
 
 function createDefaultStore(): AppStore {
   return {
+    scoringVersion: "",
     channelLocked: {},
     drafts: {},
     submissions: {},
@@ -233,12 +144,16 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
   const [workshopsData, setWorkshopsData] = useState<Workshop[]>([]);
   const [judgesData, setJudgesData] = useState<Judge[]>([]);
+  const [criteriaData, setCriteriaData] = useState<Criterion[]>([]);
+  const [scoringVersion, setScoringVersion] = useState("V1");
   const [dataMode, setDataMode] = useState<"loading" | "bitable" | "error">("loading");
   const [dataMessage, setDataMessage] = useState("正在连接飞书多维表格…");
   const [connectedEmpty, setConnectedEmpty] = useState(false);
   const [activeApplicationId, setActiveApplicationId] = useState("");
   const [activeApplicationName, setActiveApplicationName] = useState("");
-  const [linkState, setLinkState] = useState<"checking" | "valid" | "invalid">("checking");
+  const [linkState, setLinkState] = useState<"checking" | "valid" | "invalid" | "error">("checking");
+  const [linkMessage, setLinkMessage] = useState("");
+  const [configurationReloadKey, setConfigurationReloadKey] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [view, setView] = useState<View>("judge");
   const [activeWorkshopId, setActiveWorkshopId] = useState("");
@@ -279,9 +194,9 @@ export default function Home() {
   const ballotLocked = Object.values(judgeSubmissions).some((item) => item.locked);
   const editingLocked = channelLocked || ballotLocked;
   const completedCount = Object.keys(judgeSubmissions).length;
-  const total = weightedTotal(draft.scores);
-  const dimensionsDone = scoreCount(draft.scores);
-  const canSubmit = !editingLocked && dimensionsDone === criteria.length;
+  const total = weightedTotal(draft.scores, criteriaData);
+  const dimensionsDone = scoreCount(draft.scores, criteriaData);
+  const canSubmit = !editingLocked && criteriaData.length === 6 && dimensionsDone === criteriaData.length;
   const nominatedIds = new Set(
     workshop.projects
       .filter((item) => {
@@ -298,6 +213,7 @@ export default function Home() {
       setConnectedEmpty(false);
       setWorkshopsData([]);
       setJudgesData([]);
+      setCriteriaData([]);
       setActiveWorkshopId("");
       setJudgeId("");
       setProjectId("");
@@ -307,6 +223,7 @@ export default function Home() {
         if (saved) {
           const parsed = JSON.parse(saved) as Partial<AppStore>;
           localStore = {
+            scoringVersion: parsed.scoringVersion ?? "",
             channelLocked: parsed.channelLocked ?? {},
             drafts: parsed.drafts ?? {},
             submissions: {},
@@ -325,29 +242,37 @@ export default function Home() {
           message: string;
           workshops?: Workshop[];
           judges?: Judge[];
+          criteria?: Criterion[];
+          scoringVersion?: string;
           submissions?: AppStore["submissions"];
         };
-        if (response.ok && payload.connected && payload.workshops?.length && payload.judges?.length) {
+        if (response.ok && payload.connected && payload.workshops?.length && payload.judges?.length && payload.criteria?.length === 6) {
           const nextWorkshops = payload.workshops;
           const nextJudges = payload.judges;
           setWorkshopsData(nextWorkshops);
           setJudgesData(nextJudges);
+          setCriteriaData(payload.criteria);
+          setScoringVersion(payload.scoringVersion || "V1");
+          setActiveApplicationName(nextWorkshops[0].name);
           setActiveWorkshopId(nextWorkshops[0].id);
           setProjectId(nextWorkshops[0].projects[0].id);
           setJudgeId(nextJudges[0].id);
           setStore({
+            scoringVersion: payload.scoringVersion || "V1",
             channelLocked: {
               ...Object.fromEntries(nextWorkshops.map((item) => [item.id, false])),
               ...localStore.channelLocked,
             },
-            drafts: localStore.drafts,
+            drafts: localStore.scoringVersion === (payload.scoringVersion || "V1")
+              ? localStore.drafts
+              : {},
             submissions: payload.submissions ?? {},
           });
           setDataMode("bitable");
           setDataMessage(payload.message);
           setConnectedEmpty(false);
         } else if (response.ok && payload.connected && payload.empty) {
-          setStore({ channelLocked: {}, drafts: localStore.drafts ?? {}, submissions: {} });
+          setStore({ scoringVersion: payload.scoringVersion || "V1", channelLocked: {}, drafts: {}, submissions: {} });
           setDataMode("bitable");
           setDataMessage(payload.message);
           setConnectedEmpty(true);
@@ -372,13 +297,17 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     const initialize = async () => {
+      setLinkState("checking");
+      setLinkMessage("");
       try {
         const requestedId = new URL(window.location.href).searchParams.get("app")?.trim() || "";
         const response = await fetch("/api/configurations", { cache: "no-store" });
         const payload = await response.json() as {
           applications?: RatingApplication[];
+          message?: string;
         };
         if (cancelled) return;
+        if (!response.ok) throw new Error(payload.message || "读取工作坊配置失败");
         const nextApplications = payload.applications ?? [];
         const requestedApplication = requestedId
           ? nextApplications.find((item) => item.id === requestedId && item.enabled)
@@ -399,7 +328,8 @@ export default function Home() {
         await loadApplication(requestedApplication.id);
       } catch {
         if (!cancelled) {
-          setLinkState("invalid");
+          setLinkState("error");
+          setLinkMessage("暂时无法读取飞书工作坊配置，请检查网络后重试。");
           setHydrated(true);
         }
       }
@@ -408,7 +338,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [loadApplication]);
+  }, [loadApplication, configurationReloadKey]);
 
   useEffect(() => {
     if (hydrated) {
@@ -444,7 +374,7 @@ export default function Home() {
         const entries = judgesData
           .map((person) => workshopSubmissions[person.id]?.[item.id])
           .filter(Boolean) as Submission[];
-        const totals = entries.map((entry) => weightedTotal(entry.scores));
+        const totals = entries.map((entry) => weightedTotal(entry.scores, criteriaData));
         const criterionAverage = (criterionId: string) =>
           entries.length
             ? entries.reduce((sum, entry) => sum + (entry.scores[criterionId] ?? 0), 0) / entries.length
@@ -456,8 +386,8 @@ export default function Home() {
           highest: totals.length ? Math.max(...totals) : 0,
           lowest: totals.length ? Math.min(...totals) : 0,
           nominations: entries.filter((entry) => entry.nomination).length,
-          innovation: criterionAverage("innovation"),
-          value: criterionAverage("value"),
+          innovation: criterionAverage("d3"),
+          value: criterionAverage("d2"),
         };
       })
       .sort((left, right) =>
@@ -467,7 +397,7 @@ export default function Home() {
         || right.value - left.value
         || left.project.id.localeCompare(right.project.id),
       );
-  }, [workshop, workshopSubmissions, judgesData]);
+  }, [workshop, workshopSubmissions, judgesData, criteriaData]);
 
   const participatingJudges = judgesData.filter((person) =>
     Object.keys(workshopSubmissions[person.id] ?? {}).length > 0,
@@ -530,6 +460,7 @@ export default function Home() {
             judge: { id: judge.id, name: judge.name },
             scoreCard: draft,
             weightedTotal: total,
+            scoringVersion,
           }),
         });
         const payload = await response.json() as {
@@ -632,7 +563,7 @@ export default function Home() {
       "项目",
       "团队",
       "评委",
-      ...criteria.map((item) => `${item.name}(${item.weight}%)`),
+      ...criteriaData.map((item) => `${item.name}(${item.weight}%)`),
       "加权总分",
       workshop.nominationName,
       "提交时间",
@@ -646,8 +577,8 @@ export default function Home() {
           item.name,
           item.team,
           person.name,
-          ...criteria.map((criterion) => String(entry.scores[criterion.id] ?? "")),
-          weightedTotal(entry.scores).toFixed(3),
+          ...criteriaData.map((criterion) => String(entry.scores[criterion.id] ?? "")),
+          weightedTotal(entry.scores, criteriaData).toFixed(3),
           entry.nomination ? "是" : "否",
           entry.submittedAt,
         ]);
@@ -713,15 +644,20 @@ export default function Home() {
   ];
 
   if (linkState !== "valid") {
+    const checking = linkState === "checking";
+    const failed = linkState === "error";
     return (
       <main className="rating-link-shell">
         <section className="rating-link-card">
           <span className="brand-mark" aria-hidden="true">A</span>
           <p className="eyebrow">ATELIER RATING LINK</p>
-          <h1>{linkState === "checking" ? "正在验证工作坊链接" : "需要工作坊专属链接"}</h1>
-          <p>{linkState === "checking"
+          <h1>{checking ? "正在验证工作坊链接" : failed ? "暂时无法读取工作坊" : "需要工作坊专属链接"}</h1>
+          <p>{checking
             ? "正在确认这个链接对应的工作坊…"
-            : "此链接指定的工作坊不存在或尚未开放。请向工作坊组织者索取新的专属评委链接。"}</p>
+            : failed
+              ? linkMessage
+              : "此链接指定的工作坊不存在或尚未开放。请向工作坊组织者索取新的专属评委链接。"}</p>
+          {failed && <button className="loading-retry" onClick={() => setConfigurationReloadKey((value) => value + 1)}>重新读取</button>}
         </section>
       </main>
     );
@@ -929,7 +865,7 @@ export default function Home() {
             </div>
 
             <div className="criteria-list">
-              {criteria.map((criterion, index) => {
+              {criteriaData.map((criterion, index) => {
                 const value = draft.scores[criterion.id];
                 const scored = typeof value === "number";
                 const activeRubric = rubricIndex(criterion, value);
@@ -1080,14 +1016,14 @@ export default function Home() {
               <span>当前加权总分</span>
               <div><strong>{total.toFixed(2)}</strong><small>/ 10</small></div>
               <div className="total-track"><i style={{ width: `${total * 10}%` }} /></div>
-              <p>{editingLocked ? "当前评分不可修改" : dimensionsDone === criteria.length ? "六个维度已完成，可保存" : `还有 ${criteria.length - dimensionsDone} 个维度待评分`}</p>
+              <p>{editingLocked ? "当前评分不可修改" : dimensionsDone === criteriaData.length ? "六个维度已完成，可保存" : `还有 ${criteriaData.length - dimensionsDone} 个维度待评分`}</p>
             </section>
             <section className="aside-card">
               <header><h3>我的评审进度</h3><strong>{completedCount}/{workshop.projects.length}</strong></header>
               <div className="progress-track"><i style={{ width: `${completedCount / workshop.projects.length * 100}%` }} /></div>
               <dl>
                 <div><dt>当前项目</dt><dd>{project.name}</dd></div>
-                <div><dt>已完成维度</dt><dd>{dimensionsDone}/{criteria.length}</dd></div>
+                <div><dt>已完成维度</dt><dd>{dimensionsDone}/{criteriaData.length}</dd></div>
                 <div><dt>最后保存</dt><dd>{formatDate(submission?.submittedAt)}</dd></div>
               </dl>
             </section>
@@ -1141,7 +1077,7 @@ export default function Home() {
             <div>
               <span>当前总分</span>
               <strong>{total.toFixed(2)}<small>/10</small></strong>
-              <p>{dimensionsDone}/{criteria.length} 个维度已完成</p>
+              <p>{dimensionsDone}/{criteriaData.length} 个维度已完成</p>
             </div>
             <div className="mobile-score-actions">
               <button data-testid="mobile-submit" disabled={!canSubmit || syncing} onClick={() => setConfirmOpen(true)}>
@@ -1336,7 +1272,7 @@ export default function Home() {
             <p className="eyebrow">READY TO SAVE</p>
             <h2 id="submit-dialog-title">确认保存本项目评分？</h2>
             <p>
-              你将保存「{project.name}」的 {criteria.length} 项评分，
+              你将保存「{project.name}」的 {criteriaData.length} 项评分，
               {draft.nomination ? `并提名「${workshop.nominationName}」` : `不提名「${workshop.nominationName}」`}。
               保存后仍可回来修改，直到最终锁票。
             </p>

@@ -5,20 +5,13 @@ import {
   asNumber,
   asText,
   asUrl,
+  criteriaFromRecords,
   listRecords,
   resolveBitableConfig,
 } from "@/lib/bitable";
+import { SCORE_FIELD_BY_CRITERION_ID } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
-
-const scoreFields: Record<string, string> = {
-  problem: "问题定义",
-  value: "用户与业务价值",
-  innovation: "方案创新性",
-  feasibility: "可行性与完成度",
-  impact: "影响力与可推广性",
-  presentation: "表达与答辩",
-};
 
 function projectBackground(value: unknown, recordId: string, applicationId?: string) {
   if (typeof value === "string") return asUrl(value);
@@ -45,13 +38,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [workshopRecords, projectRecords, scoreRecords, judgeRecords, teamRecords] = await Promise.all([
-      config.workshopsTableId ? listRecords(config, config.workshopsTableId) : Promise.resolve([]),
+    if (!config.workshopsTableId) throw new Error("工作坊配置缺少工作坊表 ID。");
+    if (!config.rubricsTableId) throw new Error("工作坊配置缺少评分标准表 ID。");
+    const [workshopRecords, rubricRecords, projectRecords, scoreRecords, judgeRecords, teamRecords] = await Promise.all([
+      listRecords(config, config.workshopsTableId),
+      listRecords(config, config.rubricsTableId),
       listRecords(config, config.projectsTableId),
       listRecords(config, config.scoresTableId),
       config.judgesTableId ? listRecords(config, config.judgesTableId) : Promise.resolve([]),
       config.teamsTableId ? listRecords(config, config.teamsTableId) : Promise.resolve([]),
     ]);
+    if (!workshopRecords.length) throw new Error("工作坊表没有配置记录，请先填写工作坊信息。");
+    const scoring = criteriaFromRecords(rubricRecords);
     const teams = new Map(
       teamRecords
         .filter((record) => record.fields["启用"] === undefined || asBoolean(record.fields["启用"], true))
@@ -70,15 +68,14 @@ export async function GET(request: NextRequest) {
         }),
     );
 
-    const legacyFields = projectRecords[0]?.fields ?? {};
-    const workshopFields = workshopRecords[0]?.fields ?? legacyFields;
+    const workshopFields = workshopRecords[0].fields;
     const workshopId = asText(
       workshopFields["工作坊ID"],
-      asText(legacyFields["工作坊ID"], config.id || "default-workshop"),
+      config.id || "default-workshop",
     );
     const duration = asText(
       workshopFields["路演时长"],
-      asText(legacyFields["路演时长"], "8 分钟路演 · 4 分钟问答"),
+      "8 分钟路演 · 4 分钟问答",
     );
     const projects = projectRecords.flatMap((record, index) => {
       const fields = record.fields;
@@ -104,7 +101,7 @@ export async function GET(request: NextRequest) {
 
     const workshops = projects.length ? [{
       id: workshopId,
-      name: config.name || asText(workshopFields["工作坊名称"], "工作坊评分"),
+      name: asText(workshopFields["工作坊名称"], config.name || "工作坊评分"),
       date: asDate(workshopFields["日期"], "日期待定"),
       location: asText(workshopFields["地点"], "地点待定"),
       nominationName: asText(workshopFields["奖项名称"], "评委特别奖"),
@@ -143,7 +140,7 @@ export async function GET(request: NextRequest) {
       const projectId = asText(fields["项目ID"]);
       if (!workshopId || !judgeId || !projectId) return;
       const scores = Object.fromEntries(
-        Object.entries(scoreFields)
+        Object.entries(SCORE_FIELD_BY_CRITERION_ID)
           .map(([key, fieldName]) => [key, asNumber(fields[fieldName], Number.NaN)])
           .filter(([, value]) => Number.isFinite(value)),
       );
@@ -169,8 +166,11 @@ export async function GET(request: NextRequest) {
       workshops,
       judges,
       submissions,
+      criteria: scoring.criteria,
+      scoringTemplateId: scoring.templateId,
+      scoringVersion: scoring.version,
       message: workshops.length
-        ? `已从多维表格读取 ${teamRecords.length} 个项目组、${projectRecords.length} 个项目、${scoreRecords.length} 份评分。`
+        ? `已从多维表格读取 ${teamRecords.length} 个项目组、${projectRecords.length} 个项目、${scoreRecords.length} 份评分及 ${scoring.criteria.length} 个评分维度。`
         : "多维表格已连接；项目表目前为空，请先填写项目和评委配置。",
     });
   } catch (error) {
