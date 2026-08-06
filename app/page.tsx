@@ -39,6 +39,7 @@ type Judge = {
 type JudgeSession = {
   authenticated: boolean;
   authorized: boolean;
+  method?: "feishu" | "judge-link";
   user?: { name: string; avatarUrl?: string };
   judge?: Judge;
   message?: string;
@@ -177,7 +178,7 @@ export default function Home() {
     const url = new URL(window.location.href);
     const authError = url.searchParams.get("authError");
     const authSuccess = url.searchParams.get("authSuccess");
-    return authError || (authSuccess ? `已使用飞书身份登录：${authSuccess}` : "");
+    return authError || (authSuccess ? `身份验证成功：${authSuccess}` : "");
   });
   const [awardIndex, setAwardIndex] = useState(0);
   const [presenting, setPresenting] = useState(false);
@@ -1122,13 +1123,13 @@ export default function Home() {
               {authLoading ? (
                 <div className="judge-auth-copy">
                   <small>评委身份</small>
-                  <strong>正在校验飞书身份…</strong>
+                  <strong>正在校验评委身份…</strong>
                 </div>
               ) : judgeSession.authorized && judge.id ? (
                 <>
                   <span>{judge.seat}</span>
                   <div className="judge-auth-copy">
-                    <small>当前评委 · 飞书已验证</small>
+                    <small>当前评委 · {judgeSession.method === "judge-link" ? "专属链接已验证" : "飞书已验证"}</small>
                     <strong>{judge.name}</strong>
                   </div>
                   <button type="button" className="judge-auth-secondary" onClick={logoutFeishu}>退出</button>
@@ -1147,7 +1148,7 @@ export default function Home() {
                   <div className="judge-auth-copy">
                     <small>评委身份</small>
                     <strong>登录后开始评分</strong>
-                    <p>{judgeSession.message || "项目资料可公开查看；评分与提交需要飞书身份。"}</p>
+                    <p>{judgeSession.message || "同企业评委可使用飞书登录；外部评委请打开组织者发送的个人专属链接。"}</p>
                   </div>
                   <button type="button" className="judge-auth-primary" onClick={startFeishuLogin}>使用飞书登录</button>
                 </>
@@ -1168,7 +1169,7 @@ export default function Home() {
                   <strong className="mobile-auth-name">
                     {authLoading ? "正在校验…" : judgeSession.user?.name || "登录后评分"}
                   </strong>
-                  <p>{judgeSession.message || "使用飞书身份进入评分"}</p>
+                  <p>{judgeSession.message || "飞书登录，或打开个人专属链接"}</p>
                 </>
               )}
             </div>

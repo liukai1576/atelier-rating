@@ -11,9 +11,11 @@ import {
 
 export const FEISHU_SESSION_COOKIE = "atelier_feishu_session";
 export const FEISHU_OAUTH_COOKIE = "atelier_feishu_oauth";
+export const JUDGE_LINK_SESSION_COOKIE = "atelier_judge_link_session";
 
 const SESSION_MAX_AGE_SECONDS = 12 * 60 * 60;
 const OAUTH_MAX_AGE_SECONDS = 10 * 60;
+const JUDGE_LINK_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 export type FeishuIdentity = {
   openId: string;
@@ -36,6 +38,21 @@ export type OAuthState = {
   returnTo: string;
   redirectUri: string;
   exp: number;
+};
+
+export type JudgeLinkGrant = {
+  kind: "judge-link";
+  applicationId: string;
+  judgeRecordId: string;
+  exp: number;
+};
+
+export type JudgeAuthentication = {
+  authenticated: boolean;
+  method?: "feishu" | "judge-link";
+  user?: { name: string; avatarUrl?: string };
+  judge: AuthorizedJudge | null;
+  message?: string;
 };
 
 function getSessionSecret() {
@@ -157,6 +174,38 @@ export function clearFeishuSession(response: NextResponse) {
   });
 }
 
+export async function createJudgeLinkToken(applicationId: string, judgeRecordId: string) {
+  const grant: JudgeLinkGrant = {
+    kind: "judge-link",
+    applicationId,
+    judgeRecordId,
+    exp: Math.floor(Date.now() / 1000) + JUDGE_LINK_MAX_AGE_SECONDS,
+  };
+  return { token: await signToken(grant), expiresAt: new Date(grant.exp * 1000).toISOString() };
+}
+
+export async function setJudgeLinkSession(response: NextResponse, token: string) {
+  const grant = await verifyToken<JudgeLinkGrant>(token);
+  if (!grant || grant.kind !== "judge-link") throw new Error("评委专属链接无效或已经过期。");
+  response.cookies.set(JUDGE_LINK_SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: Math.max(0, grant.exp - Math.floor(Date.now() / 1000)),
+    path: "/",
+  });
+}
+
+export function clearJudgeLinkSession(response: NextResponse) {
+  response.cookies.set(JUDGE_LINK_SESSION_COOKIE, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+    path: "/",
+  });
+}
+
 function normalizeName(value: string) {
   return value.replace(/\s+/g, "").toLocaleLowerCase("zh-CN");
 }
@@ -207,5 +256,57 @@ export async function resolveJudgeForIdentity(
       seat: asText(matched.fields["座位号"], "JUDGE"),
       recordId: matched.record_id,
     },
+  };
+}
+
+export async function resolveJudgeForRecord(
+  applicationId: string,
+  judgeRecordId: string,
+): Promise<{ judge: AuthorizedJudge | null; message?: string }> {
+  const config = await resolveExactBitableConfig(applicationId);
+  if (!config?.judgesTableId) return { judge: null, message: "这个工作坊尚未配置评委表。" };
+  const records = await listRecords(config, config.judgesTableId);
+  const matched = records.find((record) =>
+    record.record_id === judgeRecordId
+    && (record.fields["启用"] === undefined || asBoolean(record.fields["启用"], true)),
+  );
+  if (!matched) return { judge: null, message: "该评委已不在当前工作坊的启用白名单中。" };
+  const name = asText(matched.fields["评委姓名"], asText(matched.fields["飞书姓名"], "未命名评委"));
+  return {
+    judge: {
+      id: asText(matched.fields["评委ID"], matched.record_id),
+      name,
+      seat: asText(matched.fields["座位号"], "JUDGE"),
+      recordId: matched.record_id,
+    },
+  };
+}
+
+export async function resolveAuthenticatedJudge(
+  request: NextRequest,
+  applicationId: string,
+  allowNameBinding: boolean,
+): Promise<JudgeAuthentication> {
+  const grant = await verifyToken<JudgeLinkGrant>(request.cookies.get(JUDGE_LINK_SESSION_COOKIE)?.value);
+  if (grant?.kind === "judge-link" && grant.applicationId === applicationId) {
+    const authorization = await resolveJudgeForRecord(applicationId, grant.judgeRecordId);
+    return {
+      authenticated: true,
+      method: "judge-link",
+      user: authorization.judge ? { name: authorization.judge.name } : undefined,
+      judge: authorization.judge,
+      message: authorization.message,
+    };
+  }
+
+  const identity = await readFeishuIdentity(request);
+  if (!identity) return { authenticated: false, judge: null };
+  const authorization = await resolveJudgeForIdentity(applicationId, identity, allowNameBinding);
+  return {
+    authenticated: true,
+    method: "feishu",
+    user: { name: identity.name, avatarUrl: identity.avatarUrl },
+    judge: authorization.judge,
+    message: authorization.message,
   };
 }

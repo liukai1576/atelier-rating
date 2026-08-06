@@ -1,26 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFeishuIdentity, resolveJudgeForIdentity } from "@/lib/feishu-auth";
+import { resolveAuthenticatedJudge } from "@/lib/feishu-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const identity = await readFeishuIdentity(request);
-  if (!identity) return NextResponse.json({ authenticated: false, authorized: false });
   const applicationId = request.nextUrl.searchParams.get("appId")?.trim() || "";
   if (!applicationId) {
-    return NextResponse.json({ authenticated: true, authorized: false, user: { name: identity.name }, message: "缺少工作坊 ID。" });
+    return NextResponse.json({ authenticated: false, authorized: false, message: "缺少工作坊 ID。" });
   }
   try {
-    const authorization = await resolveJudgeForIdentity(applicationId, identity, true);
+    const authorization = await resolveAuthenticatedJudge(request, applicationId, true);
     return NextResponse.json({
-      authenticated: true,
+      authenticated: authorization.authenticated,
       authorized: Boolean(authorization.judge),
-      user: { name: identity.name, avatarUrl: identity.avatarUrl },
+      method: authorization.method,
+      user: authorization.user,
       judge: authorization.judge,
       message: authorization.message,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "评委身份校验失败。";
-    return NextResponse.json({ authenticated: true, authorized: false, user: { name: identity.name }, message }, { status: 502 });
+    return NextResponse.json({ authenticated: false, authorized: false, message }, { status: 502 });
   }
 }

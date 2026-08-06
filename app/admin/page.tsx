@@ -20,6 +20,14 @@ type RatingApplication = {
   order: number;
 };
 
+type JudgeAccessLink = {
+  id: string;
+  name: string;
+  seat: string;
+  url: string;
+  expiresAt: string;
+};
+
 const ADMIN_SESSION_KEY = "atelier-config-admin-key";
 const judgePath = (id: string) => `/?app=${encodeURIComponent(id)}`;
 
@@ -86,6 +94,8 @@ export default function AdminPage() {
   const [rubricTemplateId, setRubricTemplateId] = useState<ScoringTemplateId>("team");
   const [rubricCriteria, setRubricCriteria] = useState<Criterion[]>([]);
   const [rubricLocked, setRubricLocked] = useState(false);
+  const [judgeLinkApplicationId, setJudgeLinkApplicationId] = useState("");
+  const [judgeLinks, setJudgeLinks] = useState<JudgeAccessLink[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -249,10 +259,40 @@ export default function AdminPage() {
     }
   };
 
-  const copyJudgeLink = async (application: RatingApplication) => {
+  const copyWorkshopLink = async (application: RatingApplication) => {
     const url = `${window.location.origin}${judgePath(application.id)}`;
     await window.navigator.clipboard.writeText(url);
-    setMessage(`已复制「${application.name}」的评委专属链接。`);
+    setMessage(`已复制「${application.name}」的公开评分台链接。`);
+  };
+
+  const loadJudgeLinks = async (application: RatingApplication) => {
+    if (busy) return;
+    setBusy(true);
+    setMessage(`正在从「${application.name}」的评委表生成个人专属链接…`);
+    try {
+      const response = await fetch("/api/auth/judge-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId: application.id, adminKey }),
+      });
+      const payload = await response.json() as { judges?: JudgeAccessLink[]; message?: string };
+      if (!response.ok) throw new Error(payload.message || "生成评委专属链接失败");
+      setJudgeLinkApplicationId(application.id);
+      setJudgeLinks(payload.judges ?? []);
+      setMessage(payload.judges?.length
+        ? `已按飞书评委表生成 ${payload.judges.length} 条个人专属链接。`
+        : "评委表中没有启用的评委，请先在飞书中填写。"
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "生成评委专属链接失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyPersonalJudgeLink = async (judgeLink: JudgeAccessLink) => {
+    await window.navigator.clipboard.writeText(judgeLink.url);
+    setMessage(`已复制「${judgeLink.name}」的个人专属登录链接。`);
   };
 
   if (!authenticated) {
@@ -313,7 +353,7 @@ export default function AdminPage() {
           void saveConfiguration();
         }}>
           <div className="config-step"><span>01</span><div><strong>复制模板</strong><p>一个工作坊复制一份标准 Base，再填写参评项目、项目组和评委；评分表保持空白。</p></div></div>
-          <div className="config-step"><span>02</span><div><strong>接入工作坊</strong><p>填写工作坊名称并粘贴 Base 链接，系统会生成固定的评委入口。</p></div></div>
+          <div className="config-step"><span>02</span><div><strong>接入工作坊</strong><p>填写工作坊名称并粘贴 Base 链接；接入后可按评委表生成个人专属入口。</p></div></div>
           {templateUrl && <a className="template-link" href={templateUrl} target="_blank" rel="noreferrer">打开标准空白模板 ↗</a>}
           <label>
             <span>工作坊名称</span>
@@ -361,11 +401,27 @@ export default function AdminPage() {
               </div>
               <div className="application-actions">
                 <a href={application.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>
-                <a href={judgePath(application.id)} target="_blank" rel="noreferrer">打开评委链接</a>
-                <button onClick={() => void copyJudgeLink(application)}>复制评委链接</button>
+                <a href={judgePath(application.id)} target="_blank" rel="noreferrer">打开公开评分台</a>
+                <button onClick={() => void copyWorkshopLink(application)}>复制公开链接</button>
+                <button disabled={busy} onClick={() => void loadJudgeLinks(application)}>生成评委个人链接</button>
                 <button disabled={busy} onClick={() => void loadRubric(application)}>配置评分标准</button>
                 <button disabled={busy || editingId === application.id} onClick={() => { setEditingId(application.id); setEditingName(application.name); }}>修改 Base 名称</button>
               </div>
+              {judgeLinkApplicationId === application.id && (
+                <section className="judge-link-panel">
+                  <header>
+                    <div><strong>评委个人专属链接</strong><small>来自飞书“评委”表 · 30 天有效 · 停用评委后立即失效</small></div>
+                    <button onClick={() => { setJudgeLinkApplicationId(""); setJudgeLinks([]); }}>收起</button>
+                  </header>
+                  {judgeLinks.length ? judgeLinks.map((judgeLink) => (
+                    <div className="judge-link-row" key={judgeLink.id}>
+                      <span>{judgeLink.seat}</span>
+                      <strong>{judgeLink.name}</strong>
+                      <button onClick={() => void copyPersonalJudgeLink(judgeLink)}>复制个人登录链接</button>
+                    </div>
+                  )) : <p>评委表中暂无启用评委。</p>}
+                </section>
+              )}
               {rubricApplicationId === application.id && (
                 <section className="application-rubric-panel">
                   <header>
