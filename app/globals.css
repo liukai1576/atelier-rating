@@ -1702,13 +1702,15 @@ textarea:disabled {
 .award-visual {
   position: relative;
   display: grid;
+  min-width: 0;
   overflow: hidden;
   place-items: center;
-  background: var(--blue);
+  background-color: var(--blue);
 }
 
 .award-visual.has-image {
-  background-position: center;
+  background-position: center center;
+  background-repeat: no-repeat;
   background-size: cover;
 }
 
@@ -2842,15 +2844,15 @@ textarea:disabled {
 }
 
 .award-1 .award-visual {
-  background: #7c3aed;
+  background-color: #7c3aed;
 }
 
 .award-2 .award-visual {
-  background: #0f766e;
+  background-color: #0f766e;
 }
 
 .award-3 .award-visual {
-  background: var(--coral);
+  background-color: var(--coral);
 }
 
 .award-pagination {
