@@ -29,6 +29,9 @@ type ManagedJudge = {
   url: string;
 };
 
+type AdminScreen = "list" | "create" | "detail";
+type DetailTab = "overview" | "judges" | "rubric";
+
 const ADMIN_SESSION_KEY = "atelier-config-admin-key";
 const judgePath = (id: string) => `/?app=${encodeURIComponent(id)}`;
 
@@ -100,6 +103,9 @@ export default function AdminPage() {
   const [judgeDrafts, setJudgeDrafts] = useState<Record<string, { name: string; seat: string }>>({});
   const [newJudgeName, setNewJudgeName] = useState("");
   const [newJudgeSeat, setNewJudgeSeat] = useState("");
+  const [screen, setScreen] = useState<AdminScreen>("list");
+  const [detailTab, setDetailTab] = useState<DetailTab>("overview");
+  const [selectedApplicationId, setSelectedApplicationId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -173,6 +179,11 @@ export default function AdminPage() {
       setBaseUrl("");
       setTemplateId("team");
       setCriteria(cloneCriteria(SCORING_TEMPLATES.team.criteria));
+      if (payload.application) {
+        setSelectedApplicationId(payload.application.id);
+        setDetailTab("overview");
+        setScreen("detail");
+      }
       setMessage(`已加入系统：${payload.application?.name ?? "新工作坊"}。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存失败");
@@ -344,6 +355,24 @@ export default function AdminPage() {
     setMessage(`已复制「${judge.name}」的个人专属评分链接。`);
   };
 
+  const openWorkshop = (application: RatingApplication, tab: DetailTab = "overview") => {
+    setSelectedApplicationId(application.id);
+    setDetailTab(tab);
+    setScreen("detail");
+    setEditingId("");
+    setEditingName("");
+    setMessage("");
+    if (tab === "judges") void loadJudges(application);
+    if (tab === "rubric") void loadRubric(application);
+  };
+
+  const selectDetailTab = (application: RatingApplication, tab: DetailTab) => {
+    setDetailTab(tab);
+    setMessage("");
+    if (tab === "judges" && judgeApplicationId !== application.id) void loadJudges(application);
+    if (tab === "rubric" && rubricApplicationId !== application.id) void loadRubric(application);
+  };
+
   if (!authenticated) {
     return (
       <main className="admin-login-shell">
@@ -367,19 +396,20 @@ export default function AdminPage() {
     );
   }
 
-  const returnApplication = applications[0];
-  const returnPath = returnApplication ? judgePath(returnApplication.id) : "/";
+  const selectedApplication = applications.find((application) => application.id === selectedApplicationId);
 
   return (
     <main className="config-view admin-config-page" data-testid="configuration-center">
-      <header className="config-heading">
-        <div>
-          <span className="eyebrow">WORKSHOP SETUP · ADMIN ONLY</span>
-          <h1>工作坊配置</h1>
-          <p>每个工作坊连接一个符合 Atelier 模板的飞书 Base；项目资料在 Base 中维护，评委可直接在这里管理。</p>
-        </div>
+      <header className="admin-topbar">
+        <button className="admin-topbar-brand" onClick={() => { setScreen("list"); setMessage(""); }}>
+          <span className="brand-mark" aria-hidden="true">A</span>
+          <span><strong>ATELIER</strong><small>工作坊管理</small></span>
+        </button>
+        <nav className="admin-primary-nav" aria-label="后台主导航">
+          <button className={screen === "list" ? "active" : ""} onClick={() => { setScreen("list"); setMessage(""); }}>工作坊列表</button>
+          <button className={screen === "create" ? "active" : ""} onClick={() => { setScreen("create"); setMessage(""); }}>新建工作坊</button>
+        </nav>
         <div className="admin-header-actions">
-          <Link href={returnPath}>返回当前工作坊</Link>
           <button disabled={busy} onClick={() => {
             setBusy(true);
             setMessage("正在重新读取飞书配置…");
@@ -387,22 +417,53 @@ export default function AdminPage() {
               .then(() => setMessage("配置已刷新。"))
               .catch((error) => setMessage(error instanceof Error ? error.message : "读取飞书配置失败"))
               .finally(() => setBusy(false));
-          }}>重新读取配置</button>
+          }}>刷新数据</button>
           <button onClick={() => {
             window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
             setAuthenticated(false);
             setAdminKey("");
-          }}>退出管理</button>
+          }}>退出</button>
         </div>
       </header>
 
-      <div className="config-layout">
+      {message && <p className="config-message admin-global-message" role="status">{message}</p>}
+
+      {screen === "list" && (
+        <section className="admin-content admin-list-view">
+          <header className="admin-screen-heading">
+            <div><span className="eyebrow">WORKSHOPS</span><h1>工作坊列表</h1><p>一个工作坊对应一个飞书 Base。进入详情后再管理名称、评委和评分标准。</p></div>
+            <button className="admin-primary-action" onClick={() => { setScreen("create"); setMessage(""); }}>新建工作坊</button>
+          </header>
+          <div className="workshop-list-card">
+            <div className="workshop-list-header"><span>工作坊</span><span>数据连接</span><span>状态</span><span>操作</span></div>
+            {applications.length ? applications.map((application) => (
+              <article className="workshop-list-row" key={application.id}>
+                <div className="workshop-list-name"><strong>{application.name}</strong><small>{application.id}</small></div>
+                <div className="workshop-list-meta"><span>飞书 Base</span><small>{application.projectsTableId ? "6 张业务表已连接" : "待检查数据表"}</small></div>
+                <span className={`workshop-status ${application.enabled ? "enabled" : "disabled"}`}>{application.enabled ? "已开放" : "未开放"}</span>
+                <div className="workshop-list-actions">
+                  <button className="primary" onClick={() => openWorkshop(application)}>查看详情</button>
+                  <a href={judgePath(application.id)} target="_blank" rel="noreferrer">评分台 ↗</a>
+                  <a href={application.baseUrl} target="_blank" rel="noreferrer">Base ↗</a>
+                </div>
+              </article>
+            )) : (
+              <div className="admin-empty-state"><strong>还没有工作坊</strong><p>从标准模板复制一份飞书 Base，然后创建第一个工作坊。</p><button onClick={() => setScreen("create")}>新建工作坊</button></div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {screen === "create" && (
+        <section className="admin-content admin-create-view">
+          <button className="admin-back-button" onClick={() => { setScreen("list"); setMessage(""); }}>← 返回工作坊列表</button>
+          <header className="admin-screen-heading"><div><span className="eyebrow">NEW WORKSHOP</span><h1>新建工作坊</h1><p>准备一份符合模板的飞书 Base，校验成功后即可加入系统。</p></div></header>
         <form className="config-form" onSubmit={(event) => {
           event.preventDefault();
           void saveConfiguration();
         }}>
           <div className="config-step"><span>01</span><div><strong>复制模板</strong><p>一个工作坊复制一份标准 Base，再填写参评项目和项目组；评分表保持空白。</p></div></div>
-          <div className="config-step"><span>02</span><div><strong>接入工作坊</strong><p>填写工作坊名称并粘贴 Base 链接；接入后在右侧“评委管理”中录入评委。</p></div></div>
+          <div className="config-step"><span>02</span><div><strong>接入工作坊</strong><p>填写工作坊名称并粘贴 Base 链接；接入后进入工作坊详情管理评委。</p></div></div>
           {templateUrl && <a className="template-link" href={templateUrl} target="_blank" rel="noreferrer">打开标准空白模板 ↗</a>}
           <label>
             <span>工作坊名称</span>
@@ -430,37 +491,63 @@ export default function AdminPage() {
           <button className="config-submit" disabled={busy || !name.trim() || !baseUrl.trim()}>
             {busy ? "正在处理…" : "校验并加入系统"}
           </button>
-          {message && <p className="config-message" role="status">{message}</p>}
         </form>
+        </section>
+      )}
 
-        <section className="application-list" aria-label="已配置工作坊">
-          <header><div><span className="eyebrow">CONNECTED WORKSHOPS</span><h2>已配置工作坊</h2></div><strong>{applications.length}</strong></header>
-          {applications.map((application) => (
-            <article className="active" key={application.id}>
-              <div>
-                <small>评分台可访问</small>
-                {editingId === application.id ? (
+      {screen === "detail" && selectedApplication && (
+        <section className="admin-content admin-detail-view">
+          <button className="admin-back-button" onClick={() => { setScreen("list"); setMessage(""); }}>← 返回工作坊列表</button>
+          <header className="admin-detail-hero">
+            <div><span className="eyebrow">WORKSHOP DETAIL</span><h1>{selectedApplication.name}</h1><p>{selectedApplication.id}</p></div>
+            <div className="admin-detail-hero-actions">
+              <button onClick={() => void copyWorkshopLink(selectedApplication)}>复制评分台链接</button>
+              <a href={judgePath(selectedApplication.id)} target="_blank" rel="noreferrer">打开评分台 ↗</a>
+              <a href={selectedApplication.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>
+            </div>
+          </header>
+          <nav className="admin-detail-tabs" aria-label="工作坊详情导航">
+            <button className={detailTab === "overview" ? "active" : ""} onClick={() => selectDetailTab(selectedApplication, "overview")}>概览</button>
+            <button className={detailTab === "judges" ? "active" : ""} onClick={() => selectDetailTab(selectedApplication, "judges")}>评委管理</button>
+            <button className={detailTab === "rubric" ? "active" : ""} onClick={() => selectDetailTab(selectedApplication, "rubric")}>评分标准</button>
+          </nav>
+
+          {detailTab === "overview" && (
+            <div className="admin-detail-panel">
+              <section className="admin-overview-grid">
+                <article><small>连接状态</small><strong>{selectedApplication.enabled ? "已开放" : "未开放"}</strong><p>评分台按工作坊专属链接访问。</p></article>
+                <article><small>飞书 Base</small><strong>业务数据源</strong><p>项目、评委、评分与配置均以此 Base 为准。</p></article>
+                <article><small>数据表</small><strong>6 张已连接</strong><p>工作坊、评分标准、参评项目、评分、评委、项目组。</p></article>
+              </section>
+              <section className="admin-management-card">
+                <header><div><h2>基本信息</h2><p>工作坊名称会同步修改飞书 Base 文件名，专属链接保持不变。</p></div></header>
+                {editingId === selectedApplication.id ? (
                   <div className="application-name-editor">
                     <input aria-label="工作坊名称" value={editingName} onChange={(event) => setEditingName(event.target.value)} autoFocus />
-                    <button disabled={busy || !editingName.trim()} onClick={() => void renameApplication(application)}>保存名称</button>
+                    <button disabled={busy || !editingName.trim()} onClick={() => void renameApplication(selectedApplication)}>保存名称</button>
                     <button disabled={busy} onClick={() => { setEditingId(""); setEditingName(""); }}>取消</button>
                   </div>
-                ) : <h3>{application.name}</h3>}
-                <p>工作坊表 {application.workshopsTableId || "未配置"} · 评分标准表 {application.rubricsTableId || "未配置"} · 参评项目表 {application.projectsTableId} · 评分表 {application.scoresTableId}</p>
-              </div>
-              <div className="application-actions">
-                <a href={application.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>
-                <a href={judgePath(application.id)} target="_blank" rel="noreferrer">打开公开评分台</a>
-                <button onClick={() => void copyWorkshopLink(application)}>复制公开链接</button>
-                <button disabled={busy} onClick={() => void loadJudges(application)}>评委管理</button>
-                <button disabled={busy} onClick={() => void loadRubric(application)}>配置评分标准</button>
-                <button disabled={busy || editingId === application.id} onClick={() => { setEditingId(application.id); setEditingName(application.name); }}>修改 Base 名称</button>
-              </div>
-              {judgeApplicationId === application.id && (
-                <section className="judge-link-panel">
+                ) : (
+                  <div className="admin-name-row"><div><small>工作坊名称</small><strong>{selectedApplication.name}</strong></div><button disabled={busy} onClick={() => { setEditingId(selectedApplication.id); setEditingName(selectedApplication.name); }}>修改名称</button></div>
+                )}
+                <dl className="admin-table-identifiers">
+                  <div><dt>工作坊表</dt><dd>{selectedApplication.workshopsTableId || "未配置"}</dd></div>
+                  <div><dt>评分标准表</dt><dd>{selectedApplication.rubricsTableId || "未配置"}</dd></div>
+                  <div><dt>参评项目表</dt><dd>{selectedApplication.projectsTableId || "未配置"}</dd></div>
+                  <div><dt>评分表</dt><dd>{selectedApplication.scoresTableId || "未配置"}</dd></div>
+                  <div><dt>评委表</dt><dd>{selectedApplication.judgesTableId || "未配置"}</dd></div>
+                  <div><dt>项目组表</dt><dd>{selectedApplication.teamsTableId || "未配置"}</dd></div>
+                </dl>
+              </section>
+            </div>
+          )}
+
+          {detailTab === "judges" && (
+            <div className="admin-detail-panel">
+              <section className="judge-link-panel">
                   <header>
-                    <div><strong>评委管理</strong><small>这里的新增和修改会直接写入飞书“评委”表</small></div>
-                    <button onClick={() => { setJudgeApplicationId(""); setManagedJudges([]); }}>收起</button>
+                    <div><strong>评委管理</strong><small>新增、修改及专属链接都会直接写入飞书“评委”表</small></div>
+                    <button disabled={busy} onClick={() => void loadJudges(selectedApplication)}>重新同步</button>
                   </header>
                   <form className="judge-create-row" onSubmit={(event) => { event.preventDefault(); void addJudge(); }}>
                     <input aria-label="新评委姓名" placeholder="评委姓名" value={newJudgeName} onChange={(event) => setNewJudgeName(event.target.value)} />
@@ -494,13 +581,16 @@ export default function AdminPage() {
                       </div>
                     </div>
                   )) : <p>尚未添加评委。</p>}
-                </section>
-              )}
-              {rubricApplicationId === application.id && (
-                <section className="application-rubric-panel">
+              </section>
+            </div>
+          )}
+
+          {detailTab === "rubric" && (
+            <div className="admin-detail-panel">
+              <section className="application-rubric-panel">
                   <header>
                     <div><strong>本工作坊评分标准</strong><small>{rubricLocked ? "已有评分，已锁定" : "直接写入飞书 Base"}</small></div>
-                    <button onClick={() => setRubricApplicationId("")}>收起</button>
+                    <button disabled={busy} onClick={() => void loadRubric(selectedApplication)}>重新同步</button>
                   </header>
                   <fieldset className="template-picker" disabled={rubricLocked}>
                     <legend>套用模板</legend>
@@ -516,12 +606,15 @@ export default function AdminPage() {
                   </fieldset>
                   <CriteriaEditor criteria={rubricCriteria} disabled={rubricLocked} onChange={setRubricCriteria} />
                   {!rubricLocked && <button className="config-submit" disabled={busy} onClick={() => void saveRubric()}>保存到飞书评分标准表</button>}
-                </section>
-              )}
-            </article>
-          ))}
+              </section>
+            </div>
+          )}
         </section>
-      </div>
+      )}
+
+      {screen === "detail" && !selectedApplication && (
+        <section className="admin-content admin-empty-state"><strong>工作坊不存在</strong><p>该工作坊可能已被移除，请返回列表重新选择。</p><button onClick={() => setScreen("list")}>返回工作坊列表</button></section>
+      )}
     </main>
   );
 }
