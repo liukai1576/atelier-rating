@@ -2658,6 +2658,61 @@ textarea:disabled {
   cursor: pointer;
 }
 
+.judge-link-panel > header .judge-panel-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.judge-panel-header-actions button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line) !important;
+  background: var(--white) !important;
+  color: var(--ink) !important;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.judge-panel-header-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.judge-loading-state {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  text-align: center;
+}
+
+.judge-loading-state > span {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--line);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: judge-loading-spin 0.8s linear infinite;
+}
+
+.judge-loading-state strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.judge-loading-state small {
+  font-size: 10px;
+}
+
+@keyframes judge-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
 .judge-link-row {
   display: grid;
   grid-template-columns: minmax(130px, 1fr) minmax(100px, 0.55fr);

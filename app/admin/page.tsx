@@ -103,6 +103,7 @@ export default function AdminPage() {
   const [judgeDrafts, setJudgeDrafts] = useState<Record<string, { name: string; seat: string }>>({});
   const [newJudgeName, setNewJudgeName] = useState("");
   const [newJudgeSeat, setNewJudgeSeat] = useState("");
+  const [judgesLoading, setJudgesLoading] = useState(false);
   const [screen, setScreen] = useState<AdminScreen>("list");
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
   const [selectedApplicationId, setSelectedApplicationId] = useState("");
@@ -287,6 +288,12 @@ export default function AdminPage() {
 
   const loadJudges = async (application: RatingApplication) => {
     if (busy) return;
+    setJudgeApplicationId(application.id);
+    setManagedJudges([]);
+    setJudgeDrafts({});
+    setNewJudgeName("");
+    setNewJudgeSeat("");
+    setJudgesLoading(true);
     setBusy(true);
     setMessage(`正在读取「${application.name}」的评委表…`);
     try {
@@ -296,12 +303,12 @@ export default function AdminPage() {
       });
       const payload = await response.json() as { judges?: ManagedJudge[]; message?: string };
       if (!response.ok) throw new Error(payload.message || "读取评委失败");
-      setJudgeApplicationId(application.id);
       applyJudgeList(payload.judges ?? []);
       setMessage(payload.judges?.length ? "评委名单与专属链接已从飞书同步。" : "当前没有评委，可以直接在这里添加。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "读取评委失败");
     } finally {
+      setJudgesLoading(false);
       setBusy(false);
     }
   };
@@ -355,6 +362,19 @@ export default function AdminPage() {
     setMessage(`已复制「${judge.name}」的个人专属评分链接。`);
   };
 
+  const copyAllJudgeLinks = async () => {
+    if (!managedJudges.length || judgesLoading) return;
+    const roster = managedJudges
+      .map((judge, index) => `${index + 1}. ${judge.name}${judge.enabled ? "" : "（已停用）"}\n${judge.url}`)
+      .join("\n\n");
+    try {
+      await window.navigator.clipboard.writeText(roster);
+      setMessage(`已复制 ${managedJudges.length} 位评委的姓名和专属链接。`);
+    } catch {
+      setMessage("无法写入剪贴板，请检查浏览器的剪贴板权限后重试。");
+    }
+  };
+
   const openWorkshop = (application: RatingApplication, tab: DetailTab = "overview") => {
     setSelectedApplicationId(application.id);
     setDetailTab(tab);
@@ -369,7 +389,7 @@ export default function AdminPage() {
   const selectDetailTab = (application: RatingApplication, tab: DetailTab) => {
     setDetailTab(tab);
     setMessage("");
-    if (tab === "judges" && judgeApplicationId !== application.id) void loadJudges(application);
+    if (tab === "judges") void loadJudges(application);
     if (tab === "rubric" && rubricApplicationId !== application.id) void loadRubric(application);
   };
 
@@ -547,14 +567,21 @@ export default function AdminPage() {
               <section className="judge-link-panel">
                   <header>
                     <div><strong>评委管理</strong><small>新增、修改及专属链接都会直接写入飞书“评委”表</small></div>
-                    <button disabled={busy} onClick={() => void loadJudges(selectedApplication)}>重新同步</button>
+                    <div className="judge-panel-header-actions">
+                      <button disabled={busy || judgesLoading || !managedJudges.length} onClick={() => void copyAllJudgeLinks()}>复制全部评委链接</button>
+                      <button disabled={busy || judgesLoading} onClick={() => void loadJudges(selectedApplication)}>重新同步</button>
+                    </div>
                   </header>
-                  <form className="judge-create-row" onSubmit={(event) => { event.preventDefault(); void addJudge(); }}>
-                    <input aria-label="新评委姓名" placeholder="评委姓名" value={newJudgeName} onChange={(event) => setNewJudgeName(event.target.value)} />
-                    <input aria-label="新评委座位号" placeholder="座位号（可选）" value={newJudgeSeat} onChange={(event) => setNewJudgeSeat(event.target.value)} />
-                    <button disabled={busy || !newJudgeName.trim()}>新增评委</button>
-                  </form>
-                  {managedJudges.length ? managedJudges.map((managedJudge) => (
+                  {judgesLoading ? (
+                    <div className="judge-loading-state" role="status"><span /><strong>正在从飞书读取评委名单…</strong><small>读取完成前不会显示缓存名单</small></div>
+                  ) : (
+                    <>
+                      <form className="judge-create-row" onSubmit={(event) => { event.preventDefault(); void addJudge(); }}>
+                        <input aria-label="新评委姓名" placeholder="评委姓名" value={newJudgeName} onChange={(event) => setNewJudgeName(event.target.value)} />
+                        <input aria-label="新评委座位号" placeholder="座位号（可选）" value={newJudgeSeat} onChange={(event) => setNewJudgeSeat(event.target.value)} />
+                        <button disabled={busy || !newJudgeName.trim()}>新增评委</button>
+                      </form>
+                      {managedJudges.length ? managedJudges.map((managedJudge) => (
                     <div className={`judge-link-row ${managedJudge.enabled ? "" : "disabled"}`} key={managedJudge.recordId}>
                       <input
                         aria-label={`${managedJudge.name}姓名`}
@@ -580,7 +607,9 @@ export default function AdminPage() {
                         <button disabled={busy} onClick={() => void updateJudge(managedJudge, { enabled: !managedJudge.enabled }, managedJudge.enabled ? "评委已停用，专属链接立即失效。" : "评委已重新启用。")}>{managedJudge.enabled ? "停用" : "启用"}</button>
                       </div>
                     </div>
-                  )) : <p>尚未添加评委。</p>}
+                      )) : <p>尚未添加评委。</p>}
+                    </>
+                  )}
               </section>
             </div>
           )}
