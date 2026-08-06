@@ -8,6 +8,6 @@ export async function GET(request: NextRequest) {
   const destination = new URL("/", request.nextUrl.origin);
   if (applicationId) destination.searchParams.set("app", applicationId);
   const response = NextResponse.redirect(destination);
-  clearJudgeSession(response);
+  clearJudgeSession(response, applicationId);
   return response;
 }

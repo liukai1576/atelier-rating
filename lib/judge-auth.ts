@@ -35,6 +35,11 @@ function bytesToBase64Url(bytes: Uint8Array) {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/g, "");
 }
 
+function judgeSessionCookieName(applicationId: string) {
+  const encodedApplicationId = bytesToBase64Url(new TextEncoder().encode(applicationId));
+  return `${JUDGE_SESSION_COOKIE}_${encodedApplicationId}`;
+}
+
 function base64UrlToBytes(value: string) {
   const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
@@ -129,7 +134,7 @@ export async function setJudgeSession(
     accessToken,
     exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
   };
-  response.cookies.set(JUDGE_SESSION_COOKIE, await signToken(grant), {
+  response.cookies.set(judgeSessionCookieName(applicationId), await signToken(grant), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -138,7 +143,17 @@ export async function setJudgeSession(
   });
 }
 
-export function clearJudgeSession(response: NextResponse) {
+export function clearJudgeSession(response: NextResponse, applicationId?: string) {
+  if (applicationId) {
+    response.cookies.set(judgeSessionCookieName(applicationId), "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 0,
+      path: "/",
+    });
+  }
+  // Clear the original shared cookie as part of the migration to per-workshop sessions.
   response.cookies.set(JUDGE_SESSION_COOKIE, "", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -149,7 +164,10 @@ export function clearJudgeSession(response: NextResponse) {
 }
 
 export async function resolveAuthenticatedJudge(request: NextRequest, applicationId: string) {
-  const grant = await verifyToken<JudgeSessionGrant>(request.cookies.get(JUDGE_SESSION_COOKIE)?.value);
+  const scopedCookie = request.cookies.get(judgeSessionCookieName(applicationId))?.value;
+  const legacyCookie = request.cookies.get(JUDGE_SESSION_COOKIE)?.value;
+  const grant = await verifyToken<JudgeSessionGrant>(scopedCookie)
+    ?? await verifyToken<JudgeSessionGrant>(legacyCookie);
   if (!grant || grant.kind !== "judge-session" || grant.applicationId !== applicationId) {
     return { authenticated: false, judge: null, message: "请使用管理员发送的评委专属链接进入评分台。" };
   }
