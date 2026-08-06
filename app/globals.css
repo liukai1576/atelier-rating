@@ -1810,6 +1810,42 @@ textarea:disabled {
   line-height: 1.8;
 }
 
+.loading-indicator {
+  display: flex;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.loading-indicator i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--ink);
+  animation: loading-pulse 1s ease-in-out infinite;
+}
+
+.loading-indicator i:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.loading-indicator i:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.loading-retry {
+  margin-top: 24px;
+  padding: 12px 20px;
+  border: 0;
+  background: var(--ink);
+  color: var(--white);
+  cursor: pointer;
+}
+
+@keyframes loading-pulse {
+  0%, 100% { opacity: 0.28; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-4px); }
+}
+
 .admin-login-card {
   width: min(460px, 100%);
   padding: 42px;

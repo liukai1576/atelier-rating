@@ -15,7 +15,7 @@ if not exist node_modules (
 
 where lark-cli >nul 2>nul
 if errorlevel 1 (
-  echo lark-cli was not found. The score desk will use local demo data.
+  echo lark-cli was not found. Feishu data cannot be read or written.
   echo Install it with: npm install -g @larksuite/cli
 )
 

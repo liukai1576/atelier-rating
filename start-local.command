@@ -15,7 +15,7 @@ if [ ! -d node_modules ]; then
 fi
 
 if ! command -v lark-cli >/dev/null 2>&1; then
-  echo "提示：未找到 lark-cli，将使用本地演示数据。"
+  echo "提示：未找到 lark-cli，飞书数据将无法读取或写入。"
   echo "需要连接多维表格时运行：npm install -g @larksuite/cli"
 fi
 

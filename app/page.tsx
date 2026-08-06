@@ -46,6 +46,12 @@ type Workshop = {
   projects: Project[];
 };
 
+type Judge = {
+  id: string;
+  name: string;
+  seat: string;
+};
+
 type ScoreCard = {
   scores: Record<string, number>;
   nomination: boolean | null;
@@ -150,69 +156,29 @@ const criteria: Criterion[] = [
   },
 ];
 
-const projectSeeds = [
-  ["灯塔计划", "向光而行", "AI × 学习", "让新人在第一周找到正确的人、文档和行动路径。", "把散落在知识库、群聊和制度文档里的信息组合成一位可追问、能给出处的入职向导。"],
-  ["巡检一号", "可靠交付组", "AI × 运营", "把每日两小时的数据巡检缩短到十分钟。", "自动汇总异常、解释波动并生成待办，保留人工复核与完整审计链路。"],
-  ["回声教练", "体验增长组", "AI × 服务", "把每一次客户对话变成下一次服务改进。", "从对话中识别用户意图、情绪与关键阻塞，生成可执行的教练建议。"],
-  ["零点工作室", "产品孵化营", "AI × 创作", "从模糊想法到可测试原型，只需要一个下午。", "用结构化问题帮助团队完成需求澄清、原型生成与用户测试脚本设计。"],
-  ["智检方舟", "质量共创队", "AI × 质控", "在文件交付前发现那些最贵的错误。", "结合规则与语义理解检查合同、报告和投放素材，并给出可追溯的修改建议。"],
-  ["脉冲看板", "增长实验室", "数据智能", "让团队先看见变化，再理解变化。", "把多源指标归并为事件流，自动定位异常与可能原因，支持一键下钻。"],
-  ["同路人", "组织体验组", "协作创新", "让跨部门项目不再卡在“我以为”。", "用角色契约、决策记录和风险雷达减少信息差，帮助团队快速形成共识。"],
-  ["绿色里程", "可持续行动队", "ESG 创新", "把每个小选择换算成看得见的环境价值。", "通过轻量记录和可信口径呈现减排效果，并给出更可行的下一步建议。"],
-];
-
-function makeProjects(prefix: string, count: number): Project[] {
-  return projectSeeds.slice(0, count).map((seed, index) => ({
-    id: `${prefix}-${String(index + 1).padStart(2, "0")}`,
-    name: seed[0],
-    team: seed[1],
-    track: seed[2],
-    summary: seed[3],
-    description: seed[4],
-    duration: index % 2 === 0 ? "8 分钟路演 · 4 分钟问答" : "10 分钟路演 · 5 分钟问答",
-  }));
-}
-
-const demoWorkshops: Workshop[] = [
-  {
-    id: "product-lab",
-    name: "产品创新工作坊 · 秋季场",
-    date: "2026.09.18",
-    location: "上海 · 共创大厅",
-    nominationName: "最具启发奖",
-    nominationLimit: 2,
-    projects: makeProjects("PL", 8),
-  },
-  {
-    id: "ai-camp",
-    name: "AI 应用共创营 · 华东场",
-    date: "2026.10.12",
-    location: "杭州 · 未来中心",
-    nominationName: "最佳实践奖",
-    nominationLimit: 2,
-    projects: makeProjects("AI", 6),
-  },
-  {
-    id: "cx-sprint",
-    name: "客户体验设计赛 · 决选",
-    date: "2026.11.07",
-    location: "深圳 · 城市客厅",
-    nominationName: "体验突破奖",
-    nominationLimit: 3,
-    projects: makeProjects("CX", 7),
-  },
-];
-
-const demoJudges = [
-  { id: "judge-01", name: "李晓岚", seat: "A01" },
-  { id: "judge-02", name: "周   扬", seat: "A02" },
-  { id: "judge-03", name: "陈   默", seat: "A03" },
-  { id: "judge-04", name: "王若溪", seat: "A04" },
-  { id: "judge-05", name: "赵   谦", seat: "A05" },
-  { id: "judge-06", name: "许知远", seat: "A06" },
-];
-
 const STORAGE_KEY = "atelier-workshop-score-desk-v1";
+
+const EMPTY_WORKSHOP: Workshop = {
+  id: "",
+  name: "",
+  date: "",
+  location: "",
+  nominationName: "评委特别奖",
+  nominationLimit: 1,
+  projects: [],
+};
+
+const EMPTY_JUDGE: Judge = { id: "", name: "", seat: "" };
+
+const EMPTY_PROJECT: Project = {
+  id: "",
+  name: "",
+  team: "",
+  track: "",
+  summary: "",
+  description: "",
+  duration: "",
+};
 
 function weightedTotal(scores: Record<string, number>) {
   return criteria.reduce(
@@ -228,53 +194,11 @@ function scoreCount(scores: Record<string, number>) {
   return criteria.filter((criterion) => typeof scores[criterion.id] === "number").length;
 }
 
-function seededSubmission(
-  workshopIndex: number,
-  judgeIndex: number,
-  projectIndex: number,
-  judgeName: string,
-): Submission {
-  const scores = Object.fromEntries(
-    criteria.map((criterion, criterionIndex) => [
-      criterion.id,
-      Math.min(10, 6 + ((workshopIndex + judgeIndex * 2 + projectIndex * 3 + criterionIndex) % 5)),
-    ]),
-  );
+function createDefaultStore(): AppStore {
   return {
-    scores,
-    nomination: (projectIndex + judgeIndex) % 4 === 0,
-    note: "",
-    submittedAt: `2026-07-28T${String(9 + judgeIndex).padStart(2, "0")}:${String(projectIndex * 7).padStart(2, "0")}:00.000Z`,
-    locked: false,
-    judgeName,
-  };
-}
-
-function createDefaultStore(fillAll = false): AppStore {
-  const submissions: AppStore["submissions"] = {};
-  for (let workshopIndex = 0; workshopIndex < demoWorkshops.length; workshopIndex += 1) {
-    const workshop = demoWorkshops[workshopIndex];
-    submissions[workshop.id] = {};
-    for (let judgeIndex = 1; judgeIndex < demoJudges.length; judgeIndex += 1) {
-      const judge = demoJudges[judgeIndex];
-      submissions[workshop.id][judge.id] = {};
-      const normalLimit = Math.max(1, workshop.projects.length - (judgeIndex % 3));
-      const limit = fillAll ? workshop.projects.length : normalLimit;
-      for (let projectIndex = 0; projectIndex < limit; projectIndex += 1) {
-        const project = workshop.projects[projectIndex];
-        submissions[workshop.id][judge.id][project.id] = seededSubmission(
-          workshopIndex,
-          judgeIndex,
-          projectIndex,
-          judge.name,
-        );
-      }
-    }
-  }
-  return {
-    channelLocked: Object.fromEntries(demoWorkshops.map((workshop) => [workshop.id, false])),
+    channelLocked: {},
     drafts: {},
-    submissions,
+    submissions: {},
   };
 }
 
@@ -307,9 +231,9 @@ function rubricIndex(criterion: Criterion, score?: number) {
 export default function Home() {
   const [store, setStore] = useState<AppStore>(() => createDefaultStore());
   const [hydrated, setHydrated] = useState(false);
-  const [workshopsData, setWorkshopsData] = useState<Workshop[]>(demoWorkshops);
-  const [judgesData, setJudgesData] = useState(demoJudges);
-  const [dataMode, setDataMode] = useState<"loading" | "demo" | "bitable" | "error">("loading");
+  const [workshopsData, setWorkshopsData] = useState<Workshop[]>([]);
+  const [judgesData, setJudgesData] = useState<Judge[]>([]);
+  const [dataMode, setDataMode] = useState<"loading" | "bitable" | "error">("loading");
   const [dataMessage, setDataMessage] = useState("正在连接飞书多维表格…");
   const [connectedEmpty, setConnectedEmpty] = useState(false);
   const [activeApplicationId, setActiveApplicationId] = useState("");
@@ -317,9 +241,9 @@ export default function Home() {
   const [linkState, setLinkState] = useState<"checking" | "valid" | "invalid">("checking");
   const [syncing, setSyncing] = useState(false);
   const [view, setView] = useState<View>("judge");
-  const [activeWorkshopId, setActiveWorkshopId] = useState(demoWorkshops[0].id);
-  const [judgeId, setJudgeId] = useState(demoJudges[0].id);
-  const [projectId, setProjectId] = useState(demoWorkshops[0].projects[0].id);
+  const [activeWorkshopId, setActiveWorkshopId] = useState("");
+  const [judgeId, setJudgeId] = useState("");
+  const [projectId, setProjectId] = useState("");
   const [search, setSearch] = useState("");
   const [pendingOnly, setPendingOnly] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -331,8 +255,12 @@ export default function Home() {
     ? `?appId=${encodeURIComponent(activeApplicationId)}`
     : "";
 
-  const workshop = workshopsData.find((item) => item.id === activeWorkshopId) ?? workshopsData[0];
-  const judge = judgesData.find((item) => item.id === judgeId) ?? judgesData[0];
+  const workshop = workshopsData.find((item) => item.id === activeWorkshopId)
+    ?? workshopsData[0]
+    ?? EMPTY_WORKSHOP;
+  const judge = judgesData.find((item) => item.id === judgeId)
+    ?? judgesData[0]
+    ?? EMPTY_JUDGE;
   const workshopSubmissions = useMemo(
     () => store.submissions[workshop.id] ?? {},
     [store.submissions, workshop.id],
@@ -340,7 +268,8 @@ export default function Home() {
   const judgeSubmissions = workshopSubmissions[judge.id] ?? {};
   const project = workshop.projects.find((item) => item.id === projectId)
     ?? workshop.projects.find((item) => !judgeSubmissions[item.id])
-    ?? workshop.projects[0];
+    ?? workshop.projects[0]
+    ?? EMPTY_PROJECT;
   const submission = judgeSubmissions[project.id];
   const storedDraft = store.drafts[workshop.id]?.[judge.id]?.[project.id];
   const draft = storedDraft ?? (submission
@@ -367,12 +296,24 @@ export default function Home() {
       setDataMode("loading");
       setDataMessage("正在连接飞书多维表格…");
       setConnectedEmpty(false);
+      setWorkshopsData([]);
+      setJudgesData([]);
+      setActiveWorkshopId("");
+      setJudgeId("");
+      setProjectId("");
       let localStore = createDefaultStore();
       try {
         const saved = window.localStorage.getItem(`${STORAGE_KEY}:${applicationId || "default"}`);
-        if (saved) localStore = JSON.parse(saved) as AppStore;
+        if (saved) {
+          const parsed = JSON.parse(saved) as Partial<AppStore>;
+          localStore = {
+            channelLocked: parsed.channelLocked ?? {},
+            drafts: parsed.drafts ?? {},
+            submissions: {},
+          };
+        }
       } catch {
-        // A corrupt local demo state should not prevent the scoring desk from loading.
+        // A corrupt local draft must not prevent the scoring desk from loading.
       }
 
       try {
@@ -383,12 +324,12 @@ export default function Home() {
           empty?: boolean;
           message: string;
           workshops?: Workshop[];
-          judges?: typeof demoJudges;
+          judges?: Judge[];
           submissions?: AppStore["submissions"];
         };
-        if (response.ok && payload.connected && payload.workshops?.length) {
+        if (response.ok && payload.connected && payload.workshops?.length && payload.judges?.length) {
           const nextWorkshops = payload.workshops;
-          const nextJudges = payload.judges?.length ? payload.judges : demoJudges;
+          const nextJudges = payload.judges;
           setWorkshopsData(nextWorkshops);
           setJudgesData(nextJudges);
           setActiveWorkshopId(nextWorkshops[0].id);
@@ -410,15 +351,19 @@ export default function Home() {
           setDataMode("bitable");
           setDataMessage(payload.message);
           setConnectedEmpty(true);
+        } else if (response.ok && payload.connected && payload.workshops?.length) {
+          setStore(localStore);
+          setDataMode("error");
+          setDataMessage("多维表格已读取项目，但没有可用评委。请在评委表中配置并启用至少一位评委。");
         } else {
           setStore(localStore);
-          setDataMode(response.ok ? "demo" : "error");
-          setDataMessage(payload.message || "多维表格连接失败，当前使用本地演示数据。");
+          setDataMode("error");
+          setDataMessage(payload.message || "多维表格连接失败，请稍后重试。");
         }
       } catch {
         setStore(localStore);
         setDataMode("error");
-        setDataMessage("多维表格连接失败，当前使用本地演示数据。");
+        setDataMessage("多维表格连接失败，请检查网络与飞书授权后重试。");
       } finally {
         setHydrated(true);
       }
@@ -570,13 +515,12 @@ export default function Home() {
   };
 
   const confirmSubmit = async () => {
-    if (!canSubmit || syncing) return;
+    if (!canSubmit || syncing || dataMode !== "bitable") return;
     const nextProject = nextPendingProject();
     let submittedAt = new Date().toISOString();
     let recordId = submission?.recordId;
-    if (dataMode === "bitable") {
-      setSyncing(true);
-      try {
+    setSyncing(true);
+    try {
         const response = await fetch(`/api/bitable/scores${applicationQuery}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -599,13 +543,12 @@ export default function Home() {
         }
         submittedAt = payload.submittedAt ?? submittedAt;
         recordId = payload.recordId;
-      } catch (error) {
-        setToast(error instanceof Error ? error.message : "飞书多维表格写入失败");
-        setSyncing(false);
-        return;
-      }
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "飞书多维表格写入失败");
       setSyncing(false);
+      return;
     }
+    setSyncing(false);
     setStore((previous) => {
       const next = clone(previous);
       next.submissions[workshop.id] ??= {};
@@ -621,10 +564,9 @@ export default function Home() {
     });
     setConfirmOpen(false);
     if (nextProject) setProjectId(nextProject.id);
-    const destination = dataMode === "bitable" ? "并写入多维表格" : "到本设备";
     setToast(nextProject
-      ? `已保存「${project.name}」${destination}，进入下一待评项目`
-      : `已保存「${project.name}」${destination}`);
+      ? `已保存「${project.name}」并写入多维表格，进入下一待评项目`
+      : `已保存「${project.name}」并写入多维表格`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -641,14 +583,14 @@ export default function Home() {
   };
 
   const lockBallot = () => {
-    if (completedCount < workshop.projects.length || ballotLocked || syncing) return;
+    if (dataMode !== "bitable" || completedCount < workshop.projects.length || ballotLocked || syncing) return;
     setLockConfirmOpen(true);
   };
 
   const confirmLockBallot = async () => {
-    if (dataMode === "bitable") {
-      setSyncing(true);
-      try {
+    if (dataMode !== "bitable") return;
+    setSyncing(true);
+    try {
         const response = await fetch(`/api/bitable/scores${applicationQuery}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -656,13 +598,12 @@ export default function Home() {
         });
         const payload = await response.json() as { locked: boolean; message?: string };
         if (!response.ok || !payload.locked) throw new Error(payload.message || "飞书锁票失败");
-      } catch (error) {
-        setToast(error instanceof Error ? error.message : "飞书锁票失败");
-        setSyncing(false);
-        return;
-      }
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "飞书锁票失败");
       setSyncing(false);
+      return;
     }
+    setSyncing(false);
     setStore((previous) => {
       const next = clone(previous);
       Object.values(next.submissions[workshop.id]?.[judge.id] ?? {}).forEach((item) => {
@@ -671,7 +612,7 @@ export default function Home() {
       return next;
     });
     setLockConfirmOpen(false);
-    setToast(dataMode === "bitable" ? "已锁票并同步到多维表格" : "已锁票，全部评分已最终提交");
+    setToast("已锁票并同步到多维表格");
   };
 
   const toggleChannel = () => {
@@ -683,41 +624,6 @@ export default function Home() {
       },
     }));
     setToast(channelLocked ? "评分通道已重新开放" : "评分通道已关闭");
-  };
-
-  const fillDemoData = () => {
-    if (!window.confirm("为当前工作坊填满演示评分？现有本地评分会被演示数据覆盖。")) return;
-    setStore((previous) => {
-      const next = clone(previous);
-      const workshopIndex = workshopsData.findIndex((item) => item.id === workshop.id);
-      next.submissions[workshop.id] = {};
-      judgesData.forEach((person, judgeIndex) => {
-        next.submissions[workshop.id][person.id] = {};
-        workshop.projects.forEach((item, projectIndex) => {
-          next.submissions[workshop.id][person.id][item.id] = seededSubmission(
-            workshopIndex,
-            judgeIndex,
-            projectIndex,
-            person.name,
-          );
-        });
-      });
-      return next;
-    });
-    setToast("演示数据已填满");
-  };
-
-  const resetWorkshop = () => {
-    if (!window.confirm("清空当前工作坊在本设备上的全部评分、提名与草稿？此操作不可撤销。")) return;
-    setStore((previous) => {
-      const next = clone(previous);
-      next.submissions[workshop.id] = {};
-      next.drafts[workshop.id] = {};
-      next.channelLocked[workshop.id] = false;
-      return next;
-    });
-    setProjectId(workshop.projects[0].id);
-    setToast("当前工作坊数据已重置");
   };
 
   const exportCsv = () => {
@@ -821,6 +727,34 @@ export default function Home() {
     );
   }
 
+  if (dataMode === "loading") {
+    return (
+      <main className="rating-link-shell">
+        <section className="rating-link-card" aria-live="polite" aria-busy="true">
+          <span className="brand-mark" aria-hidden="true">A</span>
+          <p className="eyebrow">FEISHU BASE</p>
+          <h1>正在读取{activeApplicationName ? `「${activeApplicationName}」` : "工作坊"}</h1>
+          <p>{dataMessage}</p>
+          <div className="loading-indicator" aria-label="正在加载"><i /><i /><i /></div>
+        </section>
+      </main>
+    );
+  }
+
+  if (dataMode === "error") {
+    return (
+      <main className="rating-link-shell">
+        <section className="rating-link-card">
+          <span className="brand-mark" aria-hidden="true">A</span>
+          <p className="eyebrow">FEISHU BASE ERROR</p>
+          <h1>暂时无法读取工作坊</h1>
+          <p>{dataMessage}</p>
+          <button className="loading-retry" onClick={() => void loadApplication(activeApplicationId)}>重新读取</button>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className={`app-shell ${presenting ? "is-presenting" : ""}`}>
       <header className="topbar">
@@ -835,13 +769,7 @@ export default function Home() {
           <span>当前工作坊</span>
           <strong>{activeApplicationName}</strong>
           <small title={dataMessage}>{!connectedEmpty
-            ? `${workshop.date} · ${
-              dataMode === "bitable"
-                ? "多维表格已连接"
-                : dataMode === "loading"
-                  ? "正在连接数据"
-                  : "本地演示数据"
-            }`
+            ? `${workshop.date} · 多维表格已连接`
             : "专属链接 · 不可切换"}</small>
         </div>
         <nav className="view-nav" aria-label="系统视图">
@@ -994,13 +922,9 @@ export default function Home() {
                 <p>每项采用 0–10 分制，系统按权重换算为满分 10 分的总分。</p>
               </div>
               <span className="autosave-status">
-                {dataMode === "bitable"
-                  ? dimensionsDone
-                    ? "草稿在本设备 · 保存后写入多维表格"
-                    : "评分草稿保存在本设备"
-                  : dimensionsDone
-                    ? "草稿已自动保存 · 本设备"
-                    : "评分时自动保存草稿"}
+                {dimensionsDone
+                  ? "草稿在本设备 · 保存后写入多维表格"
+                  : "评分草稿保存在本设备"}
               </span>
             </div>
 
@@ -1205,7 +1129,7 @@ export default function Home() {
             <section className="judge-identity">
               <span>{judge.seat}</span>
               <label>
-                <small>{dataMode === "bitable" ? "当前评委" : "当前演示评委"}</small>
+                <small>当前评委</small>
                 <select value={judge.id} onChange={(event) => setJudgeId(event.target.value)}>
                   {judgesData.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}
                 </select>
@@ -1257,9 +1181,7 @@ export default function Home() {
             <div className="admin-actions">
               <button onClick={toggleChannel}>{channelLocked ? "重新开放评分" : "关闭评分通道"}</button>
               <button onClick={() => window.location.reload()}>刷新多维表格</button>
-              <button disabled={dataMode === "bitable"} onClick={fillDemoData}>填满演示数据</button>
               <button onClick={exportCsv}>导出 CSV</button>
-              <button className="danger" disabled={dataMode === "bitable"} onClick={resetWorkshop}>重置数据</button>
             </div>
           </header>
 

@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   if (!config) {
     return NextResponse.json({
       connected: false,
-      message: "尚未配置飞书多维表格，当前使用本地演示数据。",
+      message: "尚未配置飞书多维表格，请先在配置平台绑定 Base。",
     });
   }
 
