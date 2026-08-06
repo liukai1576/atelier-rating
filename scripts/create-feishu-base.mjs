@@ -79,6 +79,8 @@ const scoreFields = [
 const judgeFields = [
   { name: "评委姓名", type: "text" },
   { name: "评委ID", type: "text" },
+  { name: "飞书OpenID", type: "text" },
+  { name: "飞书姓名", type: "text" },
   { name: "座位号", type: "text" },
   { name: "启用", type: "checkbox" },
 ];

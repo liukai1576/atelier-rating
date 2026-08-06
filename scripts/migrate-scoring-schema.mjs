@@ -116,6 +116,7 @@ for (const application of applications) {
   const tables = listTables(baseToken);
   const projectTableId = String(fields["项目表ID"]);
   const scoreTableId = String(fields["评分表ID"]);
+  const judgeTableId = String(fields["评委表ID"] || "");
   let rubricTable = tables.find((table) => table.name === "评分标准");
   if (!rubricTable) {
     rubricTable = run([
@@ -172,6 +173,18 @@ for (const application of applications) {
       "base", "+record-batch-update", "--base-token", baseToken, "--table-id", scoreTableId,
       "--json", JSON.stringify({ record_id_list: unversionedScoreIds, patch: { "评分标准版本": "V1" } }),
     ]);
+  }
+
+  if (judgeTableId) {
+    let judgeFields = listFields(baseToken, judgeTableId);
+    for (const fieldName of ["飞书OpenID", "飞书姓名"]) {
+      if (judgeFields.some((field) => field.name === fieldName)) continue;
+      run([
+        "base", "+field-create", "--base-token", baseToken, "--table-id", judgeTableId,
+        "--json", JSON.stringify({ name: fieldName, type: "text" }),
+      ]);
+      judgeFields = listFields(baseToken, judgeTableId);
+    }
   }
 
   let projectFields = listFields(baseToken, projectTableId);

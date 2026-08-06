@@ -36,6 +36,14 @@ type Judge = {
   seat: string;
 };
 
+type JudgeSession = {
+  authenticated: boolean;
+  authorized: boolean;
+  user?: { name: string; avatarUrl?: string };
+  judge?: Judge;
+  message?: string;
+};
+
 type ScoreCard = {
   scores: Record<string, number>;
   nomination: boolean | null;
@@ -145,7 +153,6 @@ export default function Home() {
   const [workshopsData, setWorkshopsData] = useState<Workshop[]>([]);
   const [judgesData, setJudgesData] = useState<Judge[]>([]);
   const [criteriaData, setCriteriaData] = useState<Criterion[]>([]);
-  const [scoringVersion, setScoringVersion] = useState("V1");
   const [dataMode, setDataMode] = useState<"loading" | "bitable" | "error">("loading");
   const [dataMessage, setDataMessage] = useState("正在连接飞书多维表格…");
   const [connectedEmpty, setConnectedEmpty] = useState(false);
@@ -158,12 +165,20 @@ export default function Home() {
   const [view, setView] = useState<View>("judge");
   const [activeWorkshopId, setActiveWorkshopId] = useState("");
   const [judgeId, setJudgeId] = useState("");
+  const [judgeSession, setJudgeSession] = useState<JudgeSession>({ authenticated: false, authorized: false });
+  const [authLoading, setAuthLoading] = useState(true);
   const [projectId, setProjectId] = useState("");
   const [search, setSearch] = useState("");
   const [pendingOnly, setPendingOnly] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const url = new URL(window.location.href);
+    const authError = url.searchParams.get("authError");
+    const authSuccess = url.searchParams.get("authSuccess");
+    return authError || (authSuccess ? `已使用飞书身份登录：${authSuccess}` : "");
+  });
   const [awardIndex, setAwardIndex] = useState(0);
   const [presenting, setPresenting] = useState(false);
   const applicationQuery = activeApplicationId
@@ -173,9 +188,7 @@ export default function Home() {
   const workshop = workshopsData.find((item) => item.id === activeWorkshopId)
     ?? workshopsData[0]
     ?? EMPTY_WORKSHOP;
-  const judge = judgesData.find((item) => item.id === judgeId)
-    ?? judgesData[0]
-    ?? EMPTY_JUDGE;
+  const judge = judgesData.find((item) => item.id === judgeId) ?? EMPTY_JUDGE;
   const workshopSubmissions = useMemo(
     () => store.submissions[workshop.id] ?? {},
     [store.submissions, workshop.id],
@@ -192,11 +205,11 @@ export default function Home() {
     : emptyScoreCard());
   const channelLocked = store.channelLocked[workshop.id] ?? false;
   const ballotLocked = Object.values(judgeSubmissions).some((item) => item.locked);
-  const editingLocked = channelLocked || ballotLocked;
+  const editingLocked = !judge.id || channelLocked || ballotLocked;
   const completedCount = Object.keys(judgeSubmissions).length;
   const total = weightedTotal(draft.scores, criteriaData);
   const dimensionsDone = scoreCount(draft.scores, criteriaData);
-  const canSubmit = !editingLocked && criteriaData.length === 6 && dimensionsDone === criteriaData.length;
+  const canSubmit = Boolean(judge.id) && !editingLocked && criteriaData.length === 6 && dimensionsDone === criteriaData.length;
   const nominatedIds = new Set(
     workshop.projects
       .filter((item) => {
@@ -252,11 +265,9 @@ export default function Home() {
           setWorkshopsData(nextWorkshops);
           setJudgesData(nextJudges);
           setCriteriaData(payload.criteria);
-          setScoringVersion(payload.scoringVersion || "V1");
           setActiveApplicationName(nextWorkshops[0].name);
           setActiveWorkshopId(nextWorkshops[0].id);
           setProjectId(nextWorkshops[0].projects[0].id);
-          setJudgeId(nextJudges[0].id);
           setStore({
             scoringVersion: payload.scoringVersion || "V1",
             channelLocked: {
@@ -294,6 +305,27 @@ export default function Home() {
       }
   }, []);
 
+  const loadJudgeSession = useCallback(async (applicationId: string) => {
+    setAuthLoading(true);
+    try {
+      const response = await fetch(`/api/auth/feishu/session?appId=${encodeURIComponent(applicationId)}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json() as JudgeSession;
+      setJudgeSession(payload);
+      setJudgeId(payload.authorized && payload.judge?.id ? payload.judge.id : "");
+    } catch {
+      setJudgeSession({
+        authenticated: false,
+        authorized: false,
+        message: "暂时无法校验飞书评委身份，请稍后重试。",
+      });
+      setJudgeId("");
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const initialize = async () => {
@@ -325,7 +357,10 @@ export default function Home() {
           window.history.replaceState(null, "", nextUrl);
         }
         setLinkState("valid");
-        await loadApplication(requestedApplication.id);
+        await Promise.all([
+          loadApplication(requestedApplication.id),
+          loadJudgeSession(requestedApplication.id),
+        ]);
       } catch {
         if (!cancelled) {
           setLinkState("error");
@@ -338,7 +373,18 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [loadApplication, configurationReloadKey]);
+  }, [loadApplication, loadJudgeSession, configurationReloadKey]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const authError = url.searchParams.get("authError");
+    const authSuccess = url.searchParams.get("authSuccess");
+    if (authError || authSuccess) {
+      url.searchParams.delete("authError");
+      url.searchParams.delete("authSuccess");
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
 
   useEffect(() => {
     if (hydrated) {
@@ -455,12 +501,9 @@ export default function Home() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            workshop: { id: workshop.id, name: workshop.name },
-            project: { id: project.id, name: project.name, team: project.team },
-            judge: { id: judge.id, name: judge.name },
+            workshop: { id: workshop.id },
+            project: { id: project.id },
             scoreCard: draft,
-            weightedTotal: total,
-            scoringVersion,
           }),
         });
         const payload = await response.json() as {
@@ -525,7 +568,7 @@ export default function Home() {
         const response = await fetch(`/api/bitable/scores${applicationQuery}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workshopId: workshop.id, judgeId: judge.id }),
+          body: JSON.stringify({ workshopId: workshop.id }),
         });
         const payload = await response.json() as { locked: boolean; message?: string };
         if (!response.ok || !payload.locked) throw new Error(payload.message || "飞书锁票失败");
@@ -544,6 +587,19 @@ export default function Home() {
     });
     setLockConfirmOpen(false);
     setToast("已锁票并同步到多维表格");
+  };
+
+  const startFeishuLogin = () => {
+    if (!activeApplicationId) return;
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(
+      `/api/auth/feishu/login?appId=${encodeURIComponent(activeApplicationId)}&returnTo=${encodeURIComponent(returnTo)}`,
+    );
+  };
+
+  const logoutFeishu = () => {
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(`/api/auth/feishu/logout?returnTo=${encodeURIComponent(returnTo)}`);
   };
 
   const toggleChannel = () => {
@@ -1063,13 +1119,39 @@ export default function Home() {
               </small>
             </section>
             <section className="judge-identity">
-              <span>{judge.seat}</span>
-              <label>
-                <small>当前评委</small>
-                <select value={judge.id} onChange={(event) => setJudgeId(event.target.value)}>
-                  {judgesData.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}
-                </select>
-              </label>
+              {authLoading ? (
+                <div className="judge-auth-copy">
+                  <small>评委身份</small>
+                  <strong>正在校验飞书身份…</strong>
+                </div>
+              ) : judgeSession.authorized && judge.id ? (
+                <>
+                  <span>{judge.seat}</span>
+                  <div className="judge-auth-copy">
+                    <small>当前评委 · 飞书已验证</small>
+                    <strong>{judge.name}</strong>
+                  </div>
+                  <button type="button" className="judge-auth-secondary" onClick={logoutFeishu}>退出</button>
+                </>
+              ) : judgeSession.authenticated ? (
+                <>
+                  <div className="judge-auth-copy">
+                    <small>当前飞书用户</small>
+                    <strong>{judgeSession.user?.name || "未知用户"}</strong>
+                    <p>{judgeSession.message || "你不在这个工作坊的评委白名单中。"}</p>
+                  </div>
+                  <button type="button" className="judge-auth-secondary" onClick={logoutFeishu}>更换账号</button>
+                </>
+              ) : (
+                <>
+                  <div className="judge-auth-copy">
+                    <small>评委身份</small>
+                    <strong>登录后开始评分</strong>
+                    <p>{judgeSession.message || "项目资料可公开查看；评分与提交需要飞书身份。"}</p>
+                  </div>
+                  <button type="button" className="judge-auth-primary" onClick={startFeishuLogin}>使用飞书登录</button>
+                </>
+              )}
             </section>
           </aside>
 

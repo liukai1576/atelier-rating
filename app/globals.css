@@ -1242,8 +1242,9 @@ textarea:disabled {
   font-size: 9px;
 }
 
-.judge-identity label {
+.judge-auth-copy {
   display: grid;
+  flex: 1;
   min-width: 0;
 }
 
@@ -1252,12 +1253,41 @@ textarea:disabled {
   font-size: 8px;
 }
 
-.judge-identity select {
-  min-width: 0;
-  border: 0;
-  background: transparent;
+.judge-auth-copy strong {
+  overflow: hidden;
   font-size: 11px;
   font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.judge-auth-copy p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.judge-auth-primary,
+.judge-auth-secondary {
+  flex: 0 0 auto;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  padding: 8px 11px;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.judge-auth-primary {
+  background: var(--ink);
+  color: white;
+}
+
+.judge-auth-secondary {
+  border-color: var(--line);
+  background: white;
+  color: var(--ink);
 }
 
 .mobile-score-dock,

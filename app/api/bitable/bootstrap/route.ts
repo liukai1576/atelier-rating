@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
       .filter((record) => record.fields["启用"] === undefined || asBoolean(record.fields["启用"], true))
       .map((record, index) => ({
         id: asText(record.fields["评委ID"], record.record_id),
-        name: asText(record.fields["评委姓名"], `评委 ${index + 1}`),
+        name: asText(record.fields["飞书姓名"], asText(record.fields["评委姓名"], `评委 ${index + 1}`)),
         seat: asText(record.fields["座位号"], `J${String(index + 1).padStart(2, "0")}`),
       }));
 
