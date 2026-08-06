@@ -40,6 +40,10 @@ function judgeUrl(origin: string, applicationId: string, accessToken: string) {
   return url.toString();
 }
 
+function judgeLinkCell(url: string) {
+  return { text: url, link: url };
+}
+
 async function loadJudges(request: NextRequest, applicationId: string, backfill: boolean) {
   const config = await resolveExactBitableConfig(applicationId);
   if (!config?.judgesTableId) throw new Error("这个工作坊尚未配置评委表。");
@@ -57,7 +61,7 @@ async function loadJudges(request: NextRequest, applicationId: string, backfill:
       await updateRecord(config, config.judgesTableId!, record.record_id, {
         "评委ID": id,
         "访问令牌": accessToken,
-        "评委专属链接": link,
+        "评委专属链接": judgeLinkCell(link),
       });
     }
     return {
@@ -100,12 +104,13 @@ export async function POST(request: NextRequest) {
       "评委ID": createJudgeId(),
       "座位号": payload.seat?.trim() || "",
       "访问令牌": accessToken,
-      "评委专属链接": judgeUrl(publicOrigin(request), applicationId, accessToken),
+      "评委专属链接": judgeLinkCell(judgeUrl(publicOrigin(request), applicationId, accessToken)),
       "启用": true,
     });
     const { judges } = await loadJudges(request, applicationId, false);
     return NextResponse.json({ saved: true, judges });
   } catch (error) {
+    console.error("[configurations judges POST]", error);
     const message = error instanceof Error ? error.message : "新增评委失败。";
     return NextResponse.json({ message }, { status: 502 });
   }
@@ -142,12 +147,13 @@ export async function PATCH(request: NextRequest) {
     if (payload.rotate || !asText(current.fields["访问令牌"])) {
       const accessToken = createAccessToken();
       fields["访问令牌"] = accessToken;
-      fields["评委专属链接"] = judgeUrl(publicOrigin(request), applicationId, accessToken);
+      fields["评委专属链接"] = judgeLinkCell(judgeUrl(publicOrigin(request), applicationId, accessToken));
     }
     await updateRecord(config, config.judgesTableId, recordId, fields);
     const { judges } = await loadJudges(request, applicationId, true);
     return NextResponse.json({ saved: true, judges });
   } catch (error) {
+    console.error("[configurations judges PATCH]", error);
     const message = error instanceof Error ? error.message : "更新评委失败。";
     return NextResponse.json({ message }, { status: 502 });
   }
