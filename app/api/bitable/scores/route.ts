@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
       "未匹配项目组",
     );
     const uniqueKey = `${payload.workshop.id}::${judge.id}::${payload.project.id}`;
+    const submittedAt = Date.now();
     const fields: Record<string, unknown> = {
       "评分唯一键": uniqueKey,
       "工作坊ID": serverWorkshopId,
@@ -107,16 +108,8 @@ export async function POST(request: NextRequest) {
       "评分标准版本": scoring.version,
       "提名": payload.scoreCard.nomination === true,
       "评审笔记": payload.scoreCard.note ?? "",
-      "提交时间": new Intl.DateTimeFormat("sv-SE", {
-        timeZone: "Asia/Shanghai",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      }).format(new Date()),
+      // Feishu Bitable datetime fields require a Unix timestamp in milliseconds.
+      "提交时间": submittedAt,
       "已锁票": false,
     };
     Object.entries(SCORE_FIELD_BY_CRITERION_ID).forEach(([key, fieldName]) => {
@@ -133,7 +126,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       saved: true,
       recordId,
-      submittedAt: new Date().toISOString(),
+      submittedAt: new Date(submittedAt).toISOString(),
     });
   } catch (error) {
     console.error("[bitable scores POST]", error);
