@@ -299,9 +299,11 @@ export async function listRegisteredApplications() {
 
 export async function resolveBitableConfig(applicationId?: string | null): Promise<BitableConfig | null> {
   const applications = await listRegisteredApplications();
-  const application = applications.find((item) => item.id === applicationId && item.enabled)
-    ?? applications.find((item) => item.enabled);
-  if (!application) return getBitableConfig();
+  const requestedId = applicationId?.trim() || "";
+  const application = requestedId
+    ? applications.find((item) => item.id === requestedId && item.enabled)
+    : applications.find((item) => item.enabled);
+  if (!application) return getRegistryCoordinates() ? null : getBitableConfig();
   return {
     ...getCliRuntime(),
     id: application.id,
