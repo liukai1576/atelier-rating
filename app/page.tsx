@@ -1157,22 +1157,44 @@ export default function Home() {
 
           <section className="mobile-score-dock" aria-label="移动端评分汇总">
             <div>
-              <span>当前总分</span>
-              <strong>{total.toFixed(2)}<small>/10</small></strong>
-              <p>{dimensionsDone}/{criteriaData.length} 个维度已完成</p>
+              <span>{judge.id ? "当前总分" : "评委身份"}</span>
+              {judge.id ? (
+                <>
+                  <strong>{total.toFixed(2)}<small>/10</small></strong>
+                  <p>{dimensionsDone}/{criteriaData.length} 个维度已完成</p>
+                </>
+              ) : (
+                <>
+                  <strong className="mobile-auth-name">
+                    {authLoading ? "正在校验…" : judgeSession.user?.name || "登录后评分"}
+                  </strong>
+                  <p>{judgeSession.message || "使用飞书身份进入评分"}</p>
+                </>
+              )}
             </div>
             <div className="mobile-score-actions">
-              <button data-testid="mobile-submit" disabled={!canSubmit || syncing} onClick={() => setConfirmOpen(true)}>
-                {syncing
-                  ? "正在同步…"
-                  : ballotLocked
-                    ? "已锁票"
-                    : submission
-                      ? "更新评分"
-                      : nextPendingProject()
-                        ? "保存并继续"
-                        : "保存评分"}
-              </button>
+              {!judge.id ? (
+                <button
+                  type="button"
+                  className="mobile-auth-button"
+                  disabled={authLoading}
+                  onClick={judgeSession.authenticated ? logoutFeishu : startFeishuLogin}
+                >
+                  {authLoading ? "校验中" : judgeSession.authenticated ? "更换飞书账号" : "飞书登录"}
+                </button>
+              ) : (
+                <button data-testid="mobile-submit" disabled={!canSubmit || syncing} onClick={() => setConfirmOpen(true)}>
+                  {syncing
+                    ? "正在同步…"
+                    : ballotLocked
+                      ? "已锁票"
+                      : submission
+                        ? "更新评分"
+                        : nextPendingProject()
+                          ? "保存并继续"
+                          : "保存评分"}
+                </button>
+              )}
               {completedCount === workshop.projects.length && !ballotLocked && (
                 <button
                   className="mobile-lock-button"

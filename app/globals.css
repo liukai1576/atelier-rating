@@ -2647,6 +2647,16 @@ textarea:disabled {
     font-size: 8px;
   }
 
+  .mobile-score-dock .mobile-auth-name {
+    max-width: 130px;
+    overflow: hidden;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .mobile-score-dock button {
     min-height: 38px;
     padding: 0 18px;
