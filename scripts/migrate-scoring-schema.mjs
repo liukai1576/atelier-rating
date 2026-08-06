@@ -177,11 +177,14 @@ for (const application of applications) {
 
   if (judgeTableId) {
     let judgeFields = listFields(baseToken, judgeTableId);
-    for (const fieldName of ["飞书OpenID", "飞书姓名"]) {
-      if (judgeFields.some((field) => field.name === fieldName)) continue;
+    for (const field of [
+      { name: "访问令牌", type: "text" },
+      { name: "评委专属链接", type: "text", style: { type: "url" } },
+    ]) {
+      if (judgeFields.some((item) => item.name === field.name)) continue;
       run([
         "base", "+field-create", "--base-token", baseToken, "--table-id", judgeTableId,
-        "--json", JSON.stringify({ name: fieldName, type: "text" }),
+        "--json", JSON.stringify(field),
       ]);
       judgeFields = listFields(baseToken, judgeTableId);
     }

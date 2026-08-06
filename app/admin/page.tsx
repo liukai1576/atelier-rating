@@ -20,12 +20,13 @@ type RatingApplication = {
   order: number;
 };
 
-type JudgeAccessLink = {
+type ManagedJudge = {
+  recordId: string;
   id: string;
   name: string;
   seat: string;
+  enabled: boolean;
   url: string;
-  expiresAt: string;
 };
 
 const ADMIN_SESSION_KEY = "atelier-config-admin-key";
@@ -94,8 +95,11 @@ export default function AdminPage() {
   const [rubricTemplateId, setRubricTemplateId] = useState<ScoringTemplateId>("team");
   const [rubricCriteria, setRubricCriteria] = useState<Criterion[]>([]);
   const [rubricLocked, setRubricLocked] = useState(false);
-  const [judgeLinkApplicationId, setJudgeLinkApplicationId] = useState("");
-  const [judgeLinks, setJudgeLinks] = useState<JudgeAccessLink[]>([]);
+  const [judgeApplicationId, setJudgeApplicationId] = useState("");
+  const [managedJudges, setManagedJudges] = useState<ManagedJudge[]>([]);
+  const [judgeDrafts, setJudgeDrafts] = useState<Record<string, { name: string; seat: string }>>({});
+  const [newJudgeName, setNewJudgeName] = useState("");
+  const [newJudgeSeat, setNewJudgeSeat] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -265,34 +269,79 @@ export default function AdminPage() {
     setMessage(`已复制「${application.name}」的公开评分台链接。`);
   };
 
-  const loadJudgeLinks = async (application: RatingApplication) => {
+  const applyJudgeList = (judges: ManagedJudge[]) => {
+    setManagedJudges(judges);
+    setJudgeDrafts(Object.fromEntries(judges.map((judge) => [judge.recordId, { name: judge.name, seat: judge.seat }])));
+  };
+
+  const loadJudges = async (application: RatingApplication) => {
     if (busy) return;
     setBusy(true);
-    setMessage(`正在从「${application.name}」的评委表生成个人专属链接…`);
+    setMessage(`正在读取「${application.name}」的评委表…`);
     try {
-      const response = await fetch("/api/auth/judge-link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applicationId: application.id, adminKey }),
+      const response = await fetch(`/api/configurations/judges?appId=${encodeURIComponent(application.id)}`, {
+        headers: { "x-atelier-admin-key": adminKey },
+        cache: "no-store",
       });
-      const payload = await response.json() as { judges?: JudgeAccessLink[]; message?: string };
-      if (!response.ok) throw new Error(payload.message || "生成评委专属链接失败");
-      setJudgeLinkApplicationId(application.id);
-      setJudgeLinks(payload.judges ?? []);
-      setMessage(payload.judges?.length
-        ? `已按飞书评委表生成 ${payload.judges.length} 条个人专属链接。`
-        : "评委表中没有启用的评委，请先在飞书中填写。"
-      );
+      const payload = await response.json() as { judges?: ManagedJudge[]; message?: string };
+      if (!response.ok) throw new Error(payload.message || "读取评委失败");
+      setJudgeApplicationId(application.id);
+      applyJudgeList(payload.judges ?? []);
+      setMessage(payload.judges?.length ? "评委名单与专属链接已从飞书同步。" : "当前没有评委，可以直接在这里添加。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "生成评委专属链接失败");
+      setMessage(error instanceof Error ? error.message : "读取评委失败");
     } finally {
       setBusy(false);
     }
   };
 
-  const copyPersonalJudgeLink = async (judgeLink: JudgeAccessLink) => {
-    await window.navigator.clipboard.writeText(judgeLink.url);
-    setMessage(`已复制「${judgeLink.name}」的个人专属登录链接。`);
+  const addJudge = async () => {
+    if (!judgeApplicationId || !newJudgeName.trim() || busy) return;
+    setBusy(true);
+    setMessage("正在新增评委并写入飞书…");
+    try {
+      const response = await fetch("/api/configurations/judges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId: judgeApplicationId, name: newJudgeName, seat: newJudgeSeat, adminKey }),
+      });
+      const payload = await response.json() as { saved?: boolean; judges?: ManagedJudge[]; message?: string };
+      if (!response.ok || !payload.saved) throw new Error(payload.message || "新增评委失败");
+      applyJudgeList(payload.judges ?? []);
+      setNewJudgeName("");
+      setNewJudgeSeat("");
+      setMessage("评委已新增，个人专属链接已写入飞书评委表。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "新增评委失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateJudge = async (judge: ManagedJudge, patch: Record<string, unknown>, successMessage: string) => {
+    if (!judgeApplicationId || busy) return;
+    setBusy(true);
+    setMessage("正在更新飞书评委表…");
+    try {
+      const response = await fetch("/api/configurations/judges", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId: judgeApplicationId, recordId: judge.recordId, adminKey, ...patch }),
+      });
+      const payload = await response.json() as { saved?: boolean; judges?: ManagedJudge[]; message?: string };
+      if (!response.ok || !payload.saved) throw new Error(payload.message || "更新评委失败");
+      applyJudgeList(payload.judges ?? []);
+      setMessage(successMessage);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "更新评委失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyPersonalJudgeLink = async (judge: ManagedJudge) => {
+    await window.navigator.clipboard.writeText(judge.url);
+    setMessage(`已复制「${judge.name}」的个人专属评分链接。`);
   };
 
   if (!authenticated) {
@@ -327,7 +376,7 @@ export default function AdminPage() {
         <div>
           <span className="eyebrow">WORKSHOP SETUP · ADMIN ONLY</span>
           <h1>工作坊配置</h1>
-          <p>每个工作坊连接一个符合 Atelier 模板的飞书 Base；Base 里填写参评项目、项目组和评委。</p>
+          <p>每个工作坊连接一个符合 Atelier 模板的飞书 Base；项目资料在 Base 中维护，评委可直接在这里管理。</p>
         </div>
         <div className="admin-header-actions">
           <Link href={returnPath}>返回当前工作坊</Link>
@@ -352,8 +401,8 @@ export default function AdminPage() {
           event.preventDefault();
           void saveConfiguration();
         }}>
-          <div className="config-step"><span>01</span><div><strong>复制模板</strong><p>一个工作坊复制一份标准 Base，再填写参评项目、项目组和评委；评分表保持空白。</p></div></div>
-          <div className="config-step"><span>02</span><div><strong>接入工作坊</strong><p>填写工作坊名称并粘贴 Base 链接；接入后可按评委表生成个人专属入口。</p></div></div>
+          <div className="config-step"><span>01</span><div><strong>复制模板</strong><p>一个工作坊复制一份标准 Base，再填写参评项目和项目组；评分表保持空白。</p></div></div>
+          <div className="config-step"><span>02</span><div><strong>接入工作坊</strong><p>填写工作坊名称并粘贴 Base 链接；接入后在右侧“评委管理”中录入评委。</p></div></div>
           {templateUrl && <a className="template-link" href={templateUrl} target="_blank" rel="noreferrer">打开标准空白模板 ↗</a>}
           <label>
             <span>工作坊名称</span>
@@ -403,23 +452,48 @@ export default function AdminPage() {
                 <a href={application.baseUrl} target="_blank" rel="noreferrer">打开 Base ↗</a>
                 <a href={judgePath(application.id)} target="_blank" rel="noreferrer">打开公开评分台</a>
                 <button onClick={() => void copyWorkshopLink(application)}>复制公开链接</button>
-                <button disabled={busy} onClick={() => void loadJudgeLinks(application)}>生成评委个人链接</button>
+                <button disabled={busy} onClick={() => void loadJudges(application)}>评委管理</button>
                 <button disabled={busy} onClick={() => void loadRubric(application)}>配置评分标准</button>
                 <button disabled={busy || editingId === application.id} onClick={() => { setEditingId(application.id); setEditingName(application.name); }}>修改 Base 名称</button>
               </div>
-              {judgeLinkApplicationId === application.id && (
+              {judgeApplicationId === application.id && (
                 <section className="judge-link-panel">
                   <header>
-                    <div><strong>评委个人专属链接</strong><small>来自飞书“评委”表 · 30 天有效 · 停用评委后立即失效</small></div>
-                    <button onClick={() => { setJudgeLinkApplicationId(""); setJudgeLinks([]); }}>收起</button>
+                    <div><strong>评委管理</strong><small>这里的新增和修改会直接写入飞书“评委”表</small></div>
+                    <button onClick={() => { setJudgeApplicationId(""); setManagedJudges([]); }}>收起</button>
                   </header>
-                  {judgeLinks.length ? judgeLinks.map((judgeLink) => (
-                    <div className="judge-link-row" key={judgeLink.id}>
-                      <span>{judgeLink.seat}</span>
-                      <strong>{judgeLink.name}</strong>
-                      <button onClick={() => void copyPersonalJudgeLink(judgeLink)}>复制个人登录链接</button>
+                  <form className="judge-create-row" onSubmit={(event) => { event.preventDefault(); void addJudge(); }}>
+                    <input aria-label="新评委姓名" placeholder="评委姓名" value={newJudgeName} onChange={(event) => setNewJudgeName(event.target.value)} />
+                    <input aria-label="新评委座位号" placeholder="座位号（可选）" value={newJudgeSeat} onChange={(event) => setNewJudgeSeat(event.target.value)} />
+                    <button disabled={busy || !newJudgeName.trim()}>新增评委</button>
+                  </form>
+                  {managedJudges.length ? managedJudges.map((managedJudge) => (
+                    <div className={`judge-link-row ${managedJudge.enabled ? "" : "disabled"}`} key={managedJudge.recordId}>
+                      <input
+                        aria-label={`${managedJudge.name}姓名`}
+                        value={judgeDrafts[managedJudge.recordId]?.name ?? managedJudge.name}
+                        onChange={(event) => setJudgeDrafts((current) => ({
+                          ...current,
+                          [managedJudge.recordId]: { name: event.target.value, seat: current[managedJudge.recordId]?.seat ?? managedJudge.seat },
+                        }))}
+                      />
+                      <input
+                        aria-label={`${managedJudge.name}座位号`}
+                        placeholder="座位号"
+                        value={judgeDrafts[managedJudge.recordId]?.seat ?? managedJudge.seat}
+                        onChange={(event) => setJudgeDrafts((current) => ({
+                          ...current,
+                          [managedJudge.recordId]: { name: current[managedJudge.recordId]?.name ?? managedJudge.name, seat: event.target.value },
+                        }))}
+                      />
+                      <div className="judge-link-actions">
+                        <button disabled={busy} onClick={() => void updateJudge(managedJudge, judgeDrafts[managedJudge.recordId] ?? {}, "评委姓名和座位号已写入飞书。")}>保存</button>
+                        <button disabled={busy} onClick={() => void copyPersonalJudgeLink(managedJudge)}>复制专属链接</button>
+                        <button disabled={busy} onClick={() => void updateJudge(managedJudge, { rotate: true }, "已生成新链接并写入飞书，旧链接与旧会话已失效。")}>重置链接</button>
+                        <button disabled={busy} onClick={() => void updateJudge(managedJudge, { enabled: !managedJudge.enabled }, managedJudge.enabled ? "评委已停用，专属链接立即失效。" : "评委已重新启用。")}>{managedJudge.enabled ? "停用" : "启用"}</button>
+                      </div>
                     </div>
-                  )) : <p>评委表中暂无启用评委。</p>}
+                  )) : <p>尚未添加评委。</p>}
                 </section>
               )}
               {rubricApplicationId === application.id && (

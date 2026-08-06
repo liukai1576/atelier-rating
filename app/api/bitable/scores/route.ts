@@ -9,7 +9,7 @@ import {
   resolveBitableConfig,
   updateRecord,
 } from "@/lib/bitable";
-import { resolveAuthenticatedJudge } from "@/lib/feishu-auth";
+import { resolveAuthenticatedJudge } from "@/lib/judge-auth";
 import { SCORE_FIELD_BY_CRITERION_ID } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
@@ -32,9 +32,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const authorization = await resolveAuthenticatedJudge(request, applicationId, false);
+    const authorization = await resolveAuthenticatedJudge(request, applicationId);
     if (!authorization.authenticated) {
-      return NextResponse.json({ saved: false, message: "请先使用飞书登录或评委专属链接后再提交评分。" }, { status: 401 });
+      return NextResponse.json({ saved: false, message: "请使用管理员发送的评委专属链接进入后再提交评分。" }, { status: 401 });
     }
     if (!authorization.judge) {
       return NextResponse.json({ saved: false, message: authorization.message || "当前飞书用户没有评分权限。" }, { status: 403 });
@@ -150,9 +150,9 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const authorization = await resolveAuthenticatedJudge(request, applicationId, false);
+    const authorization = await resolveAuthenticatedJudge(request, applicationId);
     if (!authorization.authenticated) {
-      return NextResponse.json({ locked: false, message: "请先使用飞书登录或评委专属链接后再锁票。" }, { status: 401 });
+      return NextResponse.json({ locked: false, message: "请使用管理员发送的评委专属链接进入后再锁票。" }, { status: 401 });
     }
     if (!authorization.judge) {
       return NextResponse.json({ locked: false, message: authorization.message || "当前飞书用户没有评分权限。" }, { status: 403 });

@@ -2232,7 +2232,7 @@ textarea:disabled {
 
 .judge-link-row {
   display: grid;
-  grid-template-columns: 72px minmax(120px, 1fr) auto;
+  grid-template-columns: minmax(130px, 1fr) minmax(100px, 0.55fr);
   gap: 10px;
   align-items: center;
   min-height: 44px;
@@ -2240,13 +2240,24 @@ textarea:disabled {
   border-top: 1px solid var(--line);
 }
 
-.judge-link-row > span {
-  color: var(--muted);
-  font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 10px;
+.judge-create-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(110px, 0.55fr) auto;
+  gap: 8px;
+  margin: 4px 0 8px;
 }
 
-.judge-link-row > button {
+.judge-create-row input,
+.judge-link-row > input {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--ink);
+}
+
+.judge-create-row button,
+.judge-link-actions button {
   min-height: 32px;
   padding: 0 10px;
   border: 1px solid var(--ink);
@@ -2254,6 +2265,22 @@ textarea:disabled {
   color: var(--white);
   font-size: 10px;
   font-weight: 800;
+}
+
+.judge-link-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.judge-link-actions button:not(:first-child) {
+  background: transparent;
+  color: var(--ink);
+}
+
+.judge-link-row.disabled {
+  opacity: 0.58;
 }
 
 .application-rubric-panel > header {
@@ -3017,11 +3044,11 @@ textarea:disabled {
   }
 
   .judge-link-row {
-    grid-template-columns: 58px 1fr;
+    grid-template-columns: 1fr;
   }
 
-  .judge-link-row > button {
-    grid-column: 1 / -1;
+  .judge-create-row {
+    grid-template-columns: 1fr;
   }
 
   .page-heading h1,

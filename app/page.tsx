@@ -39,8 +39,6 @@ type Judge = {
 type JudgeSession = {
   authenticated: boolean;
   authorized: boolean;
-  method?: "feishu" | "judge-link";
-  user?: { name: string; avatarUrl?: string };
   judge?: Judge;
   message?: string;
 };
@@ -309,7 +307,7 @@ export default function Home() {
   const loadJudgeSession = useCallback(async (applicationId: string) => {
     setAuthLoading(true);
     try {
-      const response = await fetch(`/api/auth/feishu/session?appId=${encodeURIComponent(applicationId)}`, {
+      const response = await fetch(`/api/auth/judge/session?appId=${encodeURIComponent(applicationId)}`, {
         cache: "no-store",
       });
       const payload = await response.json() as JudgeSession;
@@ -319,7 +317,7 @@ export default function Home() {
       setJudgeSession({
         authenticated: false,
         authorized: false,
-        message: "暂时无法校验飞书评委身份，请稍后重试。",
+        message: "暂时无法校验评委专属链接，请稍后重试。",
       });
       setJudgeId("");
     } finally {
@@ -590,17 +588,8 @@ export default function Home() {
     setToast("已锁票并同步到多维表格");
   };
 
-  const startFeishuLogin = () => {
-    if (!activeApplicationId) return;
-    const returnTo = `${window.location.pathname}${window.location.search}`;
-    window.location.assign(
-      `/api/auth/feishu/login?appId=${encodeURIComponent(activeApplicationId)}&returnTo=${encodeURIComponent(returnTo)}`,
-    );
-  };
-
-  const logoutFeishu = () => {
-    const returnTo = `${window.location.pathname}${window.location.search}`;
-    window.location.assign(`/api/auth/feishu/logout?returnTo=${encodeURIComponent(returnTo)}`);
+  const leaveJudgeSession = () => {
+    window.location.assign(`/api/auth/judge/logout?appId=${encodeURIComponent(activeApplicationId)}`);
   };
 
   const toggleChannel = () => {
@@ -1129,29 +1118,17 @@ export default function Home() {
                 <>
                   <span>{judge.seat}</span>
                   <div className="judge-auth-copy">
-                    <small>当前评委 · {judgeSession.method === "judge-link" ? "专属链接已验证" : "飞书已验证"}</small>
+                    <small>当前评委 · 专属链接已识别</small>
                     <strong>{judge.name}</strong>
                   </div>
-                  <button type="button" className="judge-auth-secondary" onClick={logoutFeishu}>退出</button>
-                </>
-              ) : judgeSession.authenticated ? (
-                <>
-                  <div className="judge-auth-copy">
-                    <small>当前飞书用户</small>
-                    <strong>{judgeSession.user?.name || "未知用户"}</strong>
-                    <p>{judgeSession.message || "你不在这个工作坊的评委白名单中。"}</p>
-                  </div>
-                  <button type="button" className="judge-auth-secondary" onClick={logoutFeishu}>更换账号</button>
+                  <button type="button" className="judge-auth-secondary" onClick={leaveJudgeSession}>退出当前评委</button>
                 </>
               ) : (
-                <>
-                  <div className="judge-auth-copy">
-                    <small>评委身份</small>
-                    <strong>登录后开始评分</strong>
-                    <p>{judgeSession.message || "同企业评委可使用飞书登录；外部评委请打开组织者发送的个人专属链接。"}</p>
-                  </div>
-                  <button type="button" className="judge-auth-primary" onClick={startFeishuLogin}>使用飞书登录</button>
-                </>
+                <div className="judge-auth-copy">
+                  <small>评委身份</small>
+                  <strong>请使用个人专属链接</strong>
+                  <p>{judgeSession.message || "此页面不需要登录；组织者发送的个人链接会直接识别你的评委身份。"}</p>
+                </div>
               )}
             </section>
           </aside>
@@ -1167,22 +1144,15 @@ export default function Home() {
               ) : (
                 <>
                   <strong className="mobile-auth-name">
-                    {authLoading ? "正在校验…" : judgeSession.user?.name || "登录后评分"}
+                    {authLoading ? "正在校验…" : "需要评委专属链接"}
                   </strong>
-                  <p>{judgeSession.message || "飞书登录，或打开个人专属链接"}</p>
+                  <p>{judgeSession.message || "请打开组织者发送的个人链接"}</p>
                 </>
               )}
             </div>
             <div className="mobile-score-actions">
               {!judge.id ? (
-                <button
-                  type="button"
-                  className="mobile-auth-button"
-                  disabled={authLoading}
-                  onClick={judgeSession.authenticated ? logoutFeishu : startFeishuLogin}
-                >
-                  {authLoading ? "校验中" : judgeSession.authenticated ? "更换飞书账号" : "飞书登录"}
-                </button>
+                <span className="mobile-auth-button" aria-live="polite">{authLoading ? "校验中" : "等待专属链接"}</span>
               ) : (
                 <button data-testid="mobile-submit" disabled={!canSubmit || syncing} onClick={() => setConfirmOpen(true)}>
                   {syncing
